@@ -153,9 +153,12 @@ class FineGenerator(nn.Module):
         x = self.allconv15(x)
         x = self.allconv16(x)
         scalar_potential = self.allconv17(x) 
-        x_stage2 = spatial_gradient(scalar_potential, order = 2, mode = 'sobel')
+        x_stage2 = -torch.gradient(scalar_potential, spacing=1, dim=-1, edge_order=2)[0]
+        y_stage2 = -torch.gradient(scalar_potential, spacing=1, dim=-2, edge_order=2)[0]
 
-        return x_stage2
+        rec_field = torch.cat([x_stage2,y_stage2],dim=1)
+
+        return rec_field
 
 
 class LocalDis(nn.Module):

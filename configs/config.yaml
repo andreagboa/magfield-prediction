@@ -5,7 +5,7 @@ val_data: magfield_symm_val_256.h5
 test: False
 resume:
 batch_size: 150
-image_shape: [3, 256, 256]
+image_shape: [2, 256, 256]
 mask_shape: [94, 94]
 mask_batch_same: True
 max_delta_shape: [16,16]
