@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils import spectral_norm as spectral_norm_fn
 from torch.nn.utils import weight_norm as weight_norm_fn
+from kornia.filters import spatial_gradient
 
 
 class Generator(nn.Module):
@@ -151,8 +152,8 @@ class FineGenerator(nn.Module):
         x = F.interpolate(x, scale_factor=2, mode='nearest', recompute_scale_factor=True)
         x = self.allconv15(x)
         x = self.allconv16(x)
-        x = self.allconv17(x)
-        x_stage2 = x
+        scalar_potential = self.allconv17(x) 
+        x_stage2 = spatial_gradient(scalar_potential, order = 2, mode = 'sobel')
 
         return x_stage2
 
