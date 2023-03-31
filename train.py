@@ -38,7 +38,7 @@ def main():
     #To work with WandB
     if config['wandb']:
         run = wandb.init(
-            project="wgan-gp_bnd1", 
+            project="wgan-gp_scalar", 
             entity="andreathesis",
             config=config
         )
