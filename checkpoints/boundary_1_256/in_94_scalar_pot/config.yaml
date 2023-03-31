@@ -13,7 +13,7 @@ margin: [4, 4]
 div_loss: True
 curl_loss: True
 coarse_G: False
-wandb: False
+wandb: True
 exp_name: 'in_94_scalar_pot'
 
 # Costum parameter for magnetic field prediction
