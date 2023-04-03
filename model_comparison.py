@@ -18,9 +18,10 @@ plt_scale = 0.1
 rng = np.random.default_rng(0)
 path_orig = Path(__file__).parent.resolve() / 'checkpoints' / 'boundary_1_256'
 
-models = ['in_94_coarseG_l1', 'in_94_coarseG_l1False', 'in_94_l1', 'in_94_lightweight']
+# models = ['in_94_coarseG_l1', 'in_94_coarseG_l1False', 'in_94_l1', 'in_94_lightweight']
+models = ['in_94_scalar_pot']
 # model = 'in_div_curl_1_94_1' #does not work with this script
-file = h5py.File('data/bnd_256/magfield_256_large.h5')
+file = h5py.File('data/magfield_symm_val_256.h5')
 # Maybe use the validation fields
 # file = h5py.File('data/magfield_val_256.h5')
 
@@ -41,7 +42,7 @@ for model in models:
 
     for j in range(img_idx):
         # print(file['field'][img_idx,:,:,:,1].shape)
-        field = file['field'][j,:,:,:,1]
+        field = file['field'][j,:,:,:]
         # Plot field chosen
         # sample_check(field, v_max=plt_scale, filename = 'orig_'+ model)
         
