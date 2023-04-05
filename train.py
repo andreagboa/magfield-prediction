@@ -86,7 +86,7 @@ def main():
         datapath = Path(__file__).parent.resolve() / 'data'
         logger.info(f"Training on dataset: {config['dataset_name']}")
 
-        train_dataset = MagneticFieldDataset(
+        train_dataset, gt_scalar_pot = MagneticFieldDataset(
             datapath / config['train_data'],
             config['scale_factor']
         )
@@ -99,7 +99,16 @@ def main():
             drop_last=True
         )
 
-        val_dataset = MagneticFieldDataset(
+        train_loader_psi = torch.utils.data.DataLoader(
+            dataset=gt_scalar_pot,
+            batch_size=config['batch_size'],
+            shuffle=True,
+            num_workers=config['num_workers'],
+            drop_last=True
+        )
+
+
+        val_dataset, gt_scalar_pot_val = MagneticFieldDataset(
             datapath / config['val_data'],
             scaling=config['scale_factor']
         )
@@ -111,6 +120,15 @@ def main():
             num_workers=config['num_workers'],
             drop_last=True
         )
+
+        val_loader_psi = torch.utils.data.DataLoader(
+            dataset=gt_scalar_pot_val,
+            batch_size=config['batch_size'],
+            shuffle=False,
+            num_workers=config['num_workers'],
+            drop_last=True
+        )
+        
         trainer = Trainer(config)
         logger.info("\n{}".format(trainer.netG))
         logger.info("\n{}".format(trainer.globalD))
@@ -129,7 +147,10 @@ def main():
         else:
             start_iteration = 1
         iterable_train_loader = iter(train_loader)
+        iterable_train_loader_psi = iter(train_loader_psi)
         iterable_val_loader = iter(val_loader)
+        iterable_val_loader_psi = iter(val_loader_psi)
+
         l1_loss = nn.L1Loss()
         
         rng = np.random.default_rng(0)
@@ -137,10 +158,10 @@ def main():
         
         for iteration in range(start_iteration, config['niter'] + 1):
             try:
-                ground_truth = next(iterable_train_loader)
+                ground_truth = next(iterable_train_loader_psi)
             except StopIteration:
-                iterable_train_loader = iter(train_loader)
-                ground_truth = next(iterable_train_loader)
+                iterable_train_loader_psi = iter(train_loader_psi)
+                ground_truth = next(iterable_train_loader_psi)
 
             # Prepare the inputs
             gt_top = None
@@ -252,11 +273,11 @@ def main():
                     val_loss = []
                     for _ in range(25):
                         try:
-                            ground_truth = next(iterable_val_loader)
+                            ground_truth = next(iterable_val_loader_psi)
                         except StopIteration:
-                            iterable_val_loader = iter(val_loader)
-                            ground_truth = next(iterable_val_loader)
-                        
+                            iterable_val_loader_psi = iter(val_loader_psi)
+                            ground_truth = next(iterable_val_loader_psi)
+
                         # Extract center layer if three layers are provided
                         if len(ground_truth.shape) == 5:
                             ground_truth = ground_truth[:,:,:,:,1]
