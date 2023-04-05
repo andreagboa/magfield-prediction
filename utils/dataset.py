@@ -18,8 +18,11 @@ class MagneticFieldDataset(torch.utils.data.Dataset):
         if not hasattr(self, 'db'):
             self.open_hdf5()
 
-        return torch.from_numpy(self.db['field'][idx].astype('float32')) * self.scaling, torch.from_numpy(self.db['scalar_potential'][idx].astype('float32')) * self.scaling
+        field = torch.from_numpy(self.db['field'][idx].astype('float32')) * self.scaling
+        psi =  torch.from_numpy(self.db['scalar_potential'][idx].astype('float32')) * self.scaling
 
+        return field, psi
+    
     def __len__(self):
         return self.size
 

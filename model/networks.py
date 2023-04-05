@@ -21,9 +21,9 @@ class Generator(nn.Module):
 
     def forward(self, x, mask):
         x_stage1 = self.coarse_generator(x, mask) if self.coarse_G else None
-        x_stage2, psi = self.fine_generator(x, x_stage1, mask)
+        x_stage2 = self.fine_generator(x, x_stage1, mask)
 
-        return x_stage1, x_stage2, psi
+        return x_stage1, x_stage2
 
 
 class CoarseGenerator(nn.Module):
@@ -158,7 +158,7 @@ class FineGenerator(nn.Module):
 
         rec_field = torch.cat([x_stage2,y_stage2],dim=1)
 
-        return rec_field, scalar_potential
+        return scalar_potential
 
 
 class LocalDis(nn.Module):
