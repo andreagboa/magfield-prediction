@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils import spectral_norm as spectral_norm_fn
 from torch.nn.utils import weight_norm as weight_norm_fn
-from kornia.filters import spatial_gradient
 
 
 class Generator(nn.Module):
@@ -21,9 +20,9 @@ class Generator(nn.Module):
 
     def forward(self, x, mask):
         x_stage1 = self.coarse_generator(x, mask) if self.coarse_G else None
-        x_stage2 = self.fine_generator(x, x_stage1, mask)
+        x_stage2, msp = self.fine_generator(x, x_stage1, mask)
 
-        return x_stage1, x_stage2
+        return x_stage1, x_stage2, msp
 
 
 class CoarseGenerator(nn.Module):
@@ -152,13 +151,17 @@ class FineGenerator(nn.Module):
         x = F.interpolate(x, scale_factor=2, mode='nearest', recompute_scale_factor=True)
         x = self.allconv15(x)
         x = self.allconv16(x)
-        scalar_potential = self.allconv17(x) 
-        x_stage2 = -torch.gradient(scalar_potential, spacing=1, dim=-1, edge_order=2)[0]
-        y_stage2 = -torch.gradient(scalar_potential, spacing=1, dim=-2, edge_order=2)[0]
+        msp = self.allconv17(x)
 
-        rec_field = torch.cat([x_stage2,y_stage2],dim=1)
+        # Magnetic scalar potential is relative up to a constant
+        msp_min = msp.reshape((xin.size(0),-1)).min(dim=1)[0].unsqueeze(1).unsqueeze(2).unsqueeze(3)
+        msp = torch.sub(msp, msp_min)
 
-        return scalar_potential
+        x_stage2 = -torch.gradient(msp, spacing=1, dim=-1, edge_order=2)[0]
+        y_stage2 = -torch.gradient(msp, spacing=1, dim=-2, edge_order=2)[0]
+        rec_field = torch.cat([x_stage2,y_stage2], dim=1)
+
+        return rec_field, msp
 
 
 class LocalDis(nn.Module):
@@ -214,9 +217,9 @@ class LocalDis(nn.Module):
 
 
 class GlobalDis(nn.Module):
-    def __init__(self, config, image_shape, mask_shape, bnd, use_cuda=True, device_ids=None):
+    def __init__(self, config, image_shape, mask_shape, bnd, msp_loss, use_cuda=True, device_ids=None):
         super(GlobalDis, self).__init__()
-        self.input_dim = image_shape[0]
+        self.input_dim = 1 if msp_loss else image_shape[0]
         self.cnum = config['ndf']
         self.use_cuda = use_cuda
         self.device_ids = device_ids

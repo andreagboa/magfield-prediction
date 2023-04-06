@@ -19,7 +19,7 @@ class MagneticFieldDataset(torch.utils.data.Dataset):
             self.open_hdf5()
 
         field = torch.from_numpy(self.db['field'][idx].astype('float32')) * self.scaling
-        psi =  torch.from_numpy(self.db['scalar_potential'][idx].astype('float32')) * self.scaling
+        psi =  torch.from_numpy(self.db['scalar_potential'][idx].astype('float32'))
 
         return field, psi
     

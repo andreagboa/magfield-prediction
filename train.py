@@ -59,16 +59,13 @@ def main():
         mode += '_div'
     if config['curl_loss']:
         mode += '_curl'
-    #exp_name = mode + '_' + str(config['box_amount']) + '_' \
-    #''''   + str(config['mask_shape'][0]) + '_' + str(config['scale_factor'])
-    if config['test']: 
-        exp_name = 'test_' + config['exp_name']
-    cp_path = Path(__file__).parent.resolve() / 'checkpoints' / config['dataset_name'] / config['exp_name']
+    exp_name = 'test_' + config['exp_name'] if config['test'] else config['exp_name']
+    cp_path = Path(__file__).parent.resolve() / 'checkpoints' / config['dataset_name'] / exp_name
     if not cp_path.exists():
         cp_path.mkdir(parents=True)
-    # elif config['resume'] is None:
-    #     print('Experiment has already been run! Terminating...')
-    #     exit()
+    elif config['resume'] is None and not config['test']:
+        print('Experiment has already been run! Terminating...')
+        exit()
     shutil.copy(args.config, cp_path / PurePath(args.config).name)
     logger = get_logger(cp_path)
     best_score = 1
@@ -135,6 +132,7 @@ def main():
         l1_loss = nn.L1Loss()
         
         rng = np.random.default_rng(0)
+        rng_val = np.random.default_rng(1)
         time_count = time.time()
         
         for iteration in range(start_iteration, config['niter'] + 1):
@@ -178,8 +176,8 @@ def main():
             compute_g_loss = iteration % config['n_critic'] == 0
             # losses, inpainted_result, gen_result = trainer(x, bboxes, mask, 
                 # ground_truth, gt_top, gt_bottom, compute_g_loss)
-            losses, inpainted_result, gen_result = trainer(x, bboxes, mask, 
-                gt_psi, gt_top, gt_bottom, compute_g_loss)
+            losses, inpainted_result, msp = trainer(x, bboxes, mask, 
+                gt_psi, ground_truth, gt_top, gt_bottom, compute_g_loss)
             # Scalars from different devices are gathered into vectors
             for k in losses.keys():
                 if not losses[k].dim() == 0: losses[k] = torch.mean(losses[k])
@@ -222,9 +220,12 @@ def main():
                 gt = ground_truth / config['scale_factor']
                 res = inpainted_result / config['scale_factor']
                 err = abs(gt - res)
+                err_msp = abs(gt_psi - msp)
                 mode = 'Out' if config['outpaint'] else 'In'
                 plt.close('all')
-                fig, axes = plt.subplots(nrows=config['netG']['input_dim'], 
+                nrows = config['netG']['input_dim']
+                if config['msp_loss']: nrows += 1
+                fig, axes = plt.subplots(nrows=nrows, 
                                          ncols=3, sharex=True, sharey=True)
                 viz_list = [
                     ('Truth_X', gt[0,0]), (mode + 'paint_X', res[0,0]), ('Error_X', err[0,0]),
@@ -235,12 +236,20 @@ def main():
                         ('Truth_Z', gt[0,2]), (mode + 'paint_Z', res[0,2]), ('Error_Z', err[0,2])
                     ])
 
+                if config['msp_loss']:
+                    viz_list.extend([
+                        ('GT_MSP', gt_psi[0,0]), ('Prediction_MSP', msp[0,0]), ('Error', err_msp[0,0])
+                    ])
+
                 for i, (title, data) in enumerate(viz_list):
                     ax = axes.flat[i]
                     ax.set_title(title)
                     if 'Error' in title:
                         _ = ax.imshow(data.cpu().data.numpy(), cmap='cividis',
                             norm=col.Normalize(vmin=0, vmax=0.005), origin="lower")
+                    elif 'MSP' in title:
+                        _ = ax.imshow(data.cpu().data.numpy(), cmap='cividis',
+                            norm=col.Normalize(vmin=0, vmax=50), origin="lower")
                     else:
                         im = ax.imshow(data.cpu().data.numpy(), cmap='bwr',
                             norm=col.Normalize(vmin=-0.04, vmax=0.04), origin="lower")
@@ -258,29 +267,34 @@ def main():
                     val_loss = []
                     for _ in range(25):
                         try:
-                            ground_truth = next(iterable_val_loader)[1]
+                            ground_truth, gt_psi = next(iterable_val_loader)
                         except StopIteration:
                             iterable_val_loader = iter(val_loader)
-                            ground_truth = next(iterable_val_loader)[1]
+                            ground_truth, gt_psi = next(iterable_val_loader)
 
                         # Extract center layer if three layers are provided
                         if len(ground_truth.shape) == 5:
                             ground_truth = ground_truth[:,:,:,:,1]
-                        bboxes = random_bbox(config) # ADD SEED!!
+                        bboxes = random_bbox(config, rng=rng_val)
                         x, mask, _ = mask_image(ground_truth, bboxes, config)
 
                         if cuda:
                             x = x.cuda()
                             mask = mask.cuda()
                             ground_truth = ground_truth.cuda()
+                            gt_psi = gt_psi.cuda()
 
                         # Inference
-                        _, x2 = trainer_module.netG(x, mask)
+                        _, x2, msp = trainer_module.netG(x, mask)
                         if config['outpaint']:
                             x2_eval = x2
                         else:
                             x2_eval = x2 * mask + x * (1. - mask)
-                        val_loss.append(l1_loss(x2_eval, ground_truth))
+                        
+                        if config['msp_loss']:
+                            val_loss.append(l1_loss(msp, gt_psi))
+                        else:
+                            val_loss.append(l1_loss(x2_eval, ground_truth))
 
                     val_err = sum(val_loss) / len(val_loss)
                     if config['wandb']: wandb.log({"L1-loss (val)": val_err})
