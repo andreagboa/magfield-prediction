@@ -33,7 +33,7 @@ lr: 0.0001
 beta1: 0.5
 beta2: 0.9
 n_critic: 5
-niter: 100000
+niter: 600000
 print_iter: 5000
 viz_iter: 5000
 snapshot_save_iter: 20000
