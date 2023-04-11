@@ -12,9 +12,9 @@ max_delta_shape: [16,16]
 margin: [4, 4]
 div_loss: True
 curl_loss: True
-coarse_G: True
-wandb: True
-exp_name: '_with_coarse_and_l1'
+coarse_G: False
+wandb: False
+exp_name: 'in_94_UNET'
 
 # Costum parameter for magnetic field prediction
 boundary: 1
@@ -40,7 +40,7 @@ valid_iter: 2500
 
 # loss weight
 coarse_l1_alpha: 1.2
-l1_loss_alpha: 0 #3.6
+l1_loss_alpha: 3.6
 ae_loss_alpha: 7.2
 global_wgan_loss_alpha: 1.
 gan_loss_alpha: 0.001
@@ -50,9 +50,9 @@ curl_loss_alpha: 30000
 
 # network parameters
 netG:
-  input_dim: 2
+  input_dim: 3
   ngf: 32
 
 netD:
-  input_dim: 2
+  input_dim: 3
   ndf: 64
