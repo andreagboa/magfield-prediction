@@ -4,33 +4,28 @@ import torch.nn as nn
 class UNET(nn.Module):
     def __init__(self, config, use_cuda=True, device_ids=None):
         super().__init__()
-        self.input_dim = config['input_dim']
-        self.in_channels = config['ngf'] #variable cnum for in_channels
-        self.out_channels = config['ngf']
+        self.in_channels = config['input_dim']
+        self.cnum = config['ngf'] #variable cnum for in_channels
+        self.out_channels = config['input_dim']
         self.use_cuda = use_cuda
         self.device_ids = device_ids
 
-        self.conv1 = self.contract_block(self.in_channels, 32, 7, 3)
-        self.conv2 = self.contract_block(32, 64, 3, 1)
-        self.conv3 = self.contract_block(64, 128, 3, 1)
+        self.conv1 = self.contract_block(self.in_channels + 2, self.cnum, 7, 3)
+        self.conv2 = self.contract_block(self.cnum, self.cnum * 2, 3, 1)
+        self.conv3 = self.contract_block(self.cnum * 2, self.cnum * 4, 3, 1)
 
-        self.upconv3 = self.expand_block(128, 64, 3, 1)
-        self.upconv2 = self.expand_block(64*2, 32, 3, 1)
-        self.upconv1 = self.expand_block(32*2, self.out_channels, 3, 1)
+        self.upconv3 = self.expand_block(self.cnum * 4, self.cnum * 2, 3, 1)
+        self.upconv2 = self.expand_block(self.cnum * 2 *2, 32, 3, 1)
+        self.upconv1 = self.expand_block(self.cnum *2, self.out_channels, 3, 1)
 
-    def __call__(self, x, x_stage1, mask):
+    def __call__(self, x, mask):
 
         ones = torch.ones(x.size(0), 1, x.size(2), x.size(3))
         if self.use_cuda:
             ones = ones.cuda()
             mask = mask.cuda()
 
-        if x_stage1 is not None:
-            x1_inpaint = x_stage1 * mask + x * (1. - mask)
-            # conv branch
-            xnow = torch.cat([x1_inpaint, ones, mask], dim=1)
-        else:
-            xnow = torch.cat([x, ones, mask], dim=1)
+        xnow = torch.cat([x, ones, mask], dim=1)
 
         # downsampling part
         conv1 = self.conv1(xnow)

@@ -65,7 +65,8 @@ class Trainer(nn.Module):
         l1_loss = nn.L1Loss()
         losses = {}
 
-        x1, x2 = self.netG(x, mask)
+        x1 = None
+        x2 = self.netG(x, mask)
         if self.outpaint:
             if x1 is not None: x1_eval = x1
             x2_eval = x2
