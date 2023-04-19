@@ -259,7 +259,8 @@ def main():
                             ground_truth = ground_truth.cuda()
 
                         # Inference
-                        _, x2 = trainer_module.netG(x, mask)
+                        # _, x2 = trainer_module.netG(x, mask)
+                        x2 = trainer_module.netG(x, mask)
                         if config['outpaint']:
                             x2_eval = x2
                         else:
