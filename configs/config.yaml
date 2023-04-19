@@ -14,7 +14,8 @@ div_loss: True
 curl_loss: True
 coarse_G: False
 wandb: True
-exp_name: 'in_94_scalar_pot'
+x2_bnd: True
+exp_name: 'in_94_msp'
 
 # Costum parameter for magnetic field prediction
 boundary: 1

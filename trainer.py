@@ -21,6 +21,8 @@ class Trainer(nn.Module):
         self.outpaint = self.config['outpaint']
         self.mode = self.config['mode']
         self.coarse_G = self.config['coarse_G']
+        self.msp_loss = self.config['msp_loss']
+        self.x2_bnd = self.config['x2_bnd']
 
         self.netG = Generator(
             self.config['netG'],
@@ -33,6 +35,7 @@ class Trainer(nn.Module):
             self.config['image_shape'],
             self.config['mask_shape'],
             self.config['boundary'],
+            self.config['msp_loss'],
             self.use_cuda,
             self.device_ids
         )
@@ -54,31 +57,46 @@ class Trainer(nn.Module):
             self.netG.to(self.device_ids[0])
             self.globalD.to(self.device_ids[0])
 
-    def forward(self, x, bboxes, mask, gt, gt_top, gt_bottom, compute_loss_g=False):
+    def forward(self, x, bboxes, mask, gt_psi, gt, gt_top, gt_bottom, compute_loss_g=False):
         self.train()
         l1_loss = nn.L1Loss()
         losses = {}
 
-        x1, x2 = self.netG(x, mask)
+        # Now msp is the scalar potential (output of FineGenerator)
+        x1, x2, msp = self.netG(x, mask)
         if self.outpaint:
             if x1 is not None: x1_eval = x1
             x2_eval = x2
         else:
             if x1 is not None: x1_eval = x1 * mask + x * (1. - mask)
-            x2_eval = x2 * mask + x * (1. - mask)
+            # Change to Boolean x2_eval = x2 if True
+            if self.x2_bnd: x2_eval = x2 
+            else: x2_eval = x2 * mask + x * (1. - mask)
+            # x2_eval = x2 if self.x2_bnd else x2_eval = x2 * mask + x * (1. - mask)
+            
         
         # D part
         # wgan d loss
-        global_real_pred, global_fake_pred = self.dis_forward(self.globalD, gt, x2_eval.detach())
+        if self.msp_loss:
+            global_real_pred, global_fake_pred = self.dis_forward(self.globalD, gt_psi, msp.detach())
+            global_penalty = self.calc_gradient_penalty(self.globalD, gt_psi, msp.detach())
+        else:
+            global_real_pred, global_fake_pred = self.dis_forward(self.globalD, gt, x2_eval.detach())
+            global_penalty = self.calc_gradient_penalty(self.globalD, gt, x2_eval.detach())
+
         losses['wgan_d'] = torch.mean(global_fake_pred - global_real_pred) * self.config['global_wgan_loss_alpha']
-        # gradients penalty loss
-        global_penalty = self.calc_gradient_penalty(self.globalD, gt, x2_eval.detach())
         losses['wgan_gp'] = global_penalty
 
         # G part
         if compute_loss_g:
-            losses['l1'] = l1_loss(x2_eval, gt)
+            if self.msp_loss:
+                losses['l1'] = l1_loss(msp, gt_psi)
+            else:
+                # Changedd
+                losses['l1'] = l1_loss(x2 * mask, gt * mask)
+
             losses['ae'] = l1_loss(x2 * (1. - mask), gt * (1. - mask))
+
             if x1 is not None:
                 losses['l1'] += l1_loss(x1_eval, gt) * self.config['coarse_l1_alpha']
                 losses['ae'] += l1_loss(x1 * (1. - mask), gt * (1. - mask)) * self.config['coarse_l1_alpha']
@@ -118,10 +136,14 @@ class Trainer(nn.Module):
                 losses['curl'] = torch.mean(curl_mag)
             
             # wgan g loss
-            global_real_pred, global_fake_pred = self.dis_forward(self.globalD, gt, x2_eval)
+            if self.msp_loss:
+                global_real_pred, global_fake_pred = self.dis_forward(self.globalD, gt_psi, msp)
+            else:
+                global_real_pred, global_fake_pred = self.dis_forward(self.globalD, gt, x2_eval)
+            
             losses['wgan_g'] = -torch.mean(global_fake_pred) * self.config['global_wgan_loss_alpha']
 
-        return losses, x2_eval, x2
+        return losses, x2_eval, msp
 
     def dis_forward(self, netD, ground_truth, x_inpaint):
         assert ground_truth.size() == x_inpaint.size()
