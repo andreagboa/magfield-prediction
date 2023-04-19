@@ -70,7 +70,9 @@ class Trainer(nn.Module):
         else:
             if x1 is not None: x1_eval = x1 * mask + x * (1. - mask)
             # Change to Boolean x2_eval = x2 if True
-            x2_eval = x2 if self.x2_bnd is True else x2_eval = x2 * mask + x * (1. - mask)
+            if self.x2_bnd: x2_eval = x2 
+            else: x2_eval = x2 * mask + x * (1. - mask)
+            # x2_eval = x2 if self.x2_bnd else x2_eval = x2 * mask + x * (1. - mask)
             
         
         # D part
