@@ -22,6 +22,7 @@ class Trainer(nn.Module):
         self.mode = self.config['mode']
         self.coarse_G = self.config['coarse_G']
         self.msp_loss = self.config['msp_loss']
+        self.x2_bnd = self.config['x2_bnd']
 
         self.netG = Generator(
             self.config['netG'],
@@ -68,7 +69,9 @@ class Trainer(nn.Module):
             x2_eval = x2
         else:
             if x1 is not None: x1_eval = x1 * mask + x * (1. - mask)
-            x2_eval = x2 * mask + x * (1. - mask)
+            # Change to Boolean x2_eval = x2 if True
+            x2_eval = x2 if self.x2_bnd is True else x2_eval = x2 * mask + x * (1. - mask)
+            
         
         # D part
         # wgan d loss
@@ -87,7 +90,8 @@ class Trainer(nn.Module):
             if self.msp_loss:
                 losses['l1'] = l1_loss(msp, gt_psi)
             else:
-                losses['l1'] = l1_loss(x2_eval, gt)
+                # Changedd
+                losses['l1'] = l1_loss(x2 * mask, gt * mask)
 
             losses['ae'] = l1_loss(x2 * (1. - mask), gt * (1. - mask))
 

@@ -15,6 +15,7 @@ curl_loss: False
 msp_loss: True
 coarse_G: False
 wandb: True
+x2_bnd: True
 exp_name: 'in_94_scalar_pot_2'
 
 # Costum parameter for magnetic field prediction
