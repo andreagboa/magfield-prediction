@@ -12,10 +12,11 @@ max_delta_shape: [16,16]
 margin: [4, 4]
 div_loss: True
 curl_loss: True
+msp_loss: False
 coarse_G: False
 wandb: True
 x2_bnd: True
-exp_name: 'in_94_msp'
+exp_name: 'in_94_sp'
 
 # Costum parameter for magnetic field prediction
 boundary: 1
