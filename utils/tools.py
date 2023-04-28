@@ -152,6 +152,7 @@ def random_bbox(config, distributed=False, rng=None):
 
     return torch.tensor(bbox_list, dtype=torch.int64) # pylint: disable=E1102
 
+
 # bboxes is the output from random_bbox (torch.tensor)
 def bbox2mask(bboxes, height, width, max_delta_h, max_delta_w, bnd, outpaint=False):
     batch_size = bboxes.size(0)
@@ -360,3 +361,33 @@ def get_model_list(dirname, key, iteration=0, best=False):
         raise ValueError('Not found models with this iteration')
     
     return last_model_name
+
+
+def calc_div(f, in_dim):
+    Hx_x = torch.gradient(f[:,0], dim=2)[0]
+    Hy_y = torch.gradient(f[:,1], dim=1)[0]
+    if in_dim == 3:
+        Hz_z = torch.gradient(f[:,2], dim=3)[0]
+        # Taking gradients of center layer only
+        div_mag = torch.stack([Hx_x, Hy_y, Hz_z], dim=1)[:,:,:,:,1]
+    else:                    
+        div_mag = torch.stack([Hx_x, Hy_y], dim=1)
+
+    return torch.mean(torch.abs(div_mag.sum(dim=1)))
+
+
+def calc_curl(f, in_dim):
+    Hx_y = torch.gradient(f[:,0], dim=1)[0]
+    Hy_x = torch.gradient(f[:,1], dim=2)[0]
+    if in_dim == 3:
+        Hx_z = torch.gradient(f[:,0], dim=3)[0]
+        Hy_z = torch.gradient(f[:,1], dim=3)[0]
+        Hz_x = torch.gradient(f[:,2], dim=2)[0]
+        Hz_y = torch.gradient(f[:,2], dim=1)[0]
+        # Taking gradients of center layer only
+        curl_vec = torch.stack([Hz_y-Hy_z, Hx_z-Hz_x, Hy_x-Hx_y], dim=1)[:,:,:,:,1]
+        curl_mag = curl_vec.square().sum(dim=1)
+    else:
+        curl_mag = (Hy_x - Hx_y).square()
+
+    return torch.mean(curl_mag)

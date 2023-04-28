@@ -20,7 +20,8 @@ import matplotlib.colors as col
 
 import wandb
 
-#To be able to run from command prompt (changin parameters from config withour actually doing so=)
+# To be able to run from command prompt
+# Changing parameters from config without actually doing so
 parser = ArgumentParser()
 parser.add_argument(
     '--config', type=str,
@@ -52,34 +53,22 @@ def main():
         cudnn.benchmark = True
 
     # Configure checkpoint path
-    mode = f"out_{config['mode']}" if config['outpaint'] else 'in'
-    if config['mode'] == 'extend':
-        mode += '_ext'
-    if config['div_loss']:
-        mode += '_div'
-    if config['curl_loss']:
-        mode += '_curl'
-    #exp_name = mode + '_' + str(config['box_amount']) + '_' \
-    #''''   + str(config['mask_shape'][0]) + '_' + str(config['scale_factor'])
-    if config['test']: 
-        exp_name = 'test_' + config['exp_name']
     cp_path = Path(__file__).parent.resolve() / 'checkpoints' / config['dataset_name'] / config['exp_name']
+    if config['test']: cp_path /= 'test'
     if not cp_path.exists():
         cp_path.mkdir(parents=True)
-    # elif config['resume'] is None:
-    #     print('Experiment has already been run! Terminating...')
-    #     exit()
+    elif config['resume'] is None and not config['test']:
+        print('Experiment has already been run! Terminating...')
+        exit()
     shutil.copy(args.config, cp_path / PurePath(args.config).name)
+    
     logger = get_logger(cp_path)
-    best_score = 1
-
     logger.info("Arguments: {}".format(args))
     if args.seed is None: args.seed = random.randint(1, 10000)
     logger.info("Random seed: {}".format(args.seed))
     random.seed(args.seed)
     torch.manual_seed(args.seed)
     if cuda: torch.cuda.manual_seed_all(args.seed)
-
     logger.info("Configuration: {}".format(config))
 
     try:  # for unexpected error logging
@@ -115,9 +104,6 @@ def main():
         logger.info("\n{}".format(trainer.netG))
         logger.info("\n{}".format(trainer.globalD))
         
-        # WandB
-        # wandb.watch(trainer, log_freq=1, log='all')
-
         if cuda:
             trainer = nn.parallel.DataParallel(trainer, device_ids=device_ids)
             trainer_module = trainer.module
@@ -133,7 +119,9 @@ def main():
         l1_loss = nn.L1Loss()
         
         rng = np.random.default_rng(0)
+        rng_val = np.random.default_rng(1)
         time_count = time.time()
+        best_score = 1
         
         for iteration in range(start_iteration, config['niter'] + 1):
             try:
@@ -192,6 +180,7 @@ def main():
                             + losses['wgan_g'] * config['gan_loss_alpha']
                 if config['div_loss']: losses['g'] += losses['div'] * config['div_loss_alpha']
                 if config['curl_loss']: losses['g'] += losses['curl'] * config['curl_loss_alpha']
+                if config['netG']['gauge']: losses['g'] += losses['gauge'] * config['gauge_loss_alpha']
                 losses['g'].backward()
                 trainer_module.optimizer_g.step()
 
@@ -257,11 +246,12 @@ def main():
                             iterable_val_loader = iter(val_loader)
                             ground_truth = next(iterable_val_loader)
                         
-                        # Extract center layer if three layers are provided
                         if len(ground_truth.shape) == 5:
                             ground_truth = ground_truth[:,:,:,:,1]
-                        bboxes = random_bbox(config) # ADD SEED!!
-                        x, mask, _ = mask_image(ground_truth, bboxes, config)
+                        bboxes = random_bbox(config, rng=rng_val)
+                        x, mask, _ = mask_image(ground_truth, bboxes, config, bnd=config['boundary'])
+                        (t,l,h,w) = bboxes[0,0]
+                        ground_truth = ground_truth[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
 
                         if cuda:
                             x = x.cuda()
@@ -269,8 +259,8 @@ def main():
                             ground_truth = ground_truth.cuda()
 
                         # Inference
-                        _, x2 = trainer_module.netG(x, mask)
-                        if config['outpaint']:
+                        _, x2, _ = trainer_module.netG(x, mask)
+                        if config['outpaint'] or config['x2_bnd']:
                             x2_eval = x2
                         else:
                             x2_eval = x2 * mask + x * (1. - mask)

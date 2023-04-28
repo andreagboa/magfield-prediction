@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils import spectral_norm as spectral_norm_fn
 from torch.nn.utils import weight_norm as weight_norm_fn
-from kornia.filters import spatial_gradient
 
 
 class Generator(nn.Module):
@@ -12,18 +11,20 @@ class Generator(nn.Module):
         self.input_dim = config['input_dim']
         self.cnum = config['ngf']
         self.coarse_G = coarse_G
+        self.msp = config['scalar_potential']
+        self.gauge = config['gauge']
         self.use_cuda = use_cuda
         self.device_ids = device_ids
 
         if self.coarse_G:
             self.coarse_generator = CoarseGenerator(self.input_dim, self.cnum, self.use_cuda, self.device_ids)
-        self.fine_generator = FineGenerator(self.input_dim, self.cnum, self.use_cuda, self.device_ids)
+        self.fine_generator = FineGenerator(self.input_dim, self.cnum, self.msp, self.gauge, self.use_cuda, self.device_ids)
 
     def forward(self, x, mask):
         x_stage1 = self.coarse_generator(x, mask) if self.coarse_G else None
-        x_stage2 = self.fine_generator(x, x_stage1, mask)
+        x_stage2, x_fixed = self.fine_generator(x, x_stage1, mask)
 
-        return x_stage1, x_stage2
+        return x_stage1, x_stage2, x_fixed
 
 
 class CoarseGenerator(nn.Module):
@@ -90,11 +91,12 @@ class CoarseGenerator(nn.Module):
 
 
 class FineGenerator(nn.Module):
-    def __init__(self, input_dim, cnum, use_cuda=True, device_ids=None):
+    def __init__(self, input_dim, cnum, msp=False, gauge=False, use_cuda=True, device_ids=None):
         super(FineGenerator, self).__init__()
         self.use_cuda = use_cuda
         self.device_ids = device_ids
-
+        self.gauge = gauge
+        self.msp = msp
         # 3 x 256 x 256
         self.conv1 = gen_conv(input_dim + 2, cnum, 5, 1, 2)
         self.conv2_downsample = gen_conv(cnum, cnum, 3, 2, 1)
@@ -116,8 +118,11 @@ class FineGenerator(nn.Module):
         self.allconv14 = gen_conv(cnum*2, cnum*2, 3, 1, 1)
         self.allconv15 = gen_conv(cnum*2, cnum, 3, 1, 1)
         self.allconv16 = gen_conv(cnum, cnum//2, 3, 1, 1)
-        # self.allconv17 = gen_conv(cnum//2, input_dim, 3, 1, 1, activation='none')
-        self.allconv17 = gen_conv(cnum//2, 1, 3, 1, 1, activation='none')
+
+        if self.msp:
+            self.allconv17 = gen_conv(cnum//2, 1, 3, 1, 1, activation='none')
+        else:
+            self.allconv17 = gen_conv(cnum//2, input_dim, 3, 1, 1, activation='none')
 
 
     def forward(self, xin, x_stage1, mask):
@@ -152,13 +157,25 @@ class FineGenerator(nn.Module):
         x = F.interpolate(x, scale_factor=2, mode='nearest', recompute_scale_factor=True)
         x = self.allconv15(x)
         x = self.allconv16(x)
-        scalar_potential = self.allconv17(x) 
-        x_stage2 = -torch.gradient(scalar_potential, spacing=1, dim=-1, edge_order=2)[0]
-        y_stage2 = -torch.gradient(scalar_potential, spacing=1, dim=-2, edge_order=2)[0]
+        x = self.allconv17(x)
 
-        rec_field = torch.cat([x_stage2,y_stage2],dim=1)
+        x_fixed = None
+        if self.msp:
+            if self.gauge:
+                x_fixed = x[:,:,0,0]
+            else:
+                # Magnetic scalar potential is relative up to a constant
+                sp_min = x.reshape((xin.size(0),-1)).min(dim=1)[0].unsqueeze(1).unsqueeze(2).unsqueeze(3)
+                x = torch.sub(x, sp_min)
 
-        return rec_field
+            grad_x = (-1) * torch.gradient(x, dim=-1, edge_order=2)[0]
+            grad_y = (-1) * torch.gradient(x, dim=-2, edge_order=2)[0]
+            rec_field = torch.cat([grad_x, grad_y], dim=1)
+
+        else:
+            rec_field = x
+
+        return rec_field, x_fixed
 
 
 class LocalDis(nn.Module):

@@ -5,7 +5,7 @@ import torch.optim as optim
 from torch import autograd
 
 from model.networks import Generator, GlobalDis
-from utils.tools import get_model_list
+from utils.tools import get_model_list, calc_div, calc_curl
 from utils.logger import get_logger
 
 logger = get_logger()
@@ -60,7 +60,7 @@ class Trainer(nn.Module):
         l1_loss = nn.L1Loss()
         losses = {}
 
-        x1, x2 = self.netG(x, mask)
+        x1, x2, x_fixed = self.netG(x, mask)
         if self.outpaint:
             if x1 is not None: x1_eval = x1
             x2_eval = x2
@@ -95,33 +95,13 @@ class Trainer(nn.Module):
             else:
                 field = x2_eval
             
-            # Div loss
-            if self.config['div_loss']:
-                Hx_x = torch.gradient(field[:,0], dim=2)[0]
-                Hy_y = torch.gradient(field[:,1], dim=1)[0]
-                if self.config['netG']['input_dim'] == 3:
-                    Hz_z = torch.gradient(field[:,2], dim=3)[0]
-                    # Taking gradients of center layer only
-                    div_mag = torch.stack([Hx_x, Hy_y, Hz_z], dim=1)[:,:,:,:,1]
-                else:                    
-                    div_mag = torch.stack([Hx_x, Hy_y], dim=1)
-                losses['div'] = torch.mean(torch.abs(div_mag.sum(dim=1)))
-
-            # Curl
+            if self.config['div_loss']: 
+                losses['div'] = calc_div(field,  self.config['netG']['input_dim'])
             if self.config['curl_loss']:
-                Hx_y = torch.gradient(field[:,0], dim=1)[0]
-                Hy_x = torch.gradient(field[:,1], dim=2)[0]
-                if self.config['netG']['input_dim'] == 3:
-                    Hx_z = torch.gradient(field[:,0], dim=3)[0]
-                    Hy_z = torch.gradient(field[:,1], dim=3)[0]
-                    Hz_x = torch.gradient(field[:,2], dim=2)[0]
-                    Hz_y = torch.gradient(field[:,2], dim=1)[0]
-                    # Taking gradients of center layer only
-                    curl_vec = torch.stack([Hz_y-Hy_z, Hx_z-Hz_x, Hy_x-Hx_y], dim=1)[:,:,:,:,1]
-                    curl_mag = curl_vec.square().sum(dim=1)
-                else:
-                    curl_mag = (Hy_x - Hx_y).square()
-                losses['curl'] = torch.mean(curl_mag)
+                losses['curl'] = calc_curl(field,  self.config['netG']['input_dim'])
+
+            if x_fixed is not None:
+                losses['gauge'] = x_fixed.mean()
             
             # wgan g loss
             global_real_pred, global_fake_pred = self.dis_forward(self.globalD, gt, x2_eval)
@@ -166,7 +146,7 @@ class Trainer(nn.Module):
 
     def inference(self, x, mask):
         self.eval()
-        _, x2 = self.netG(x, mask)
+        _, x2, _ = self.netG(x, mask)
         x2_eval = x2 if self.outpaint else x2 * mask + x * (1. - mask)
 
         return x2_eval
