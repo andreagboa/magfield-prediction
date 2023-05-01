@@ -101,7 +101,7 @@ class Trainer(nn.Module):
                 losses['curl'] = calc_curl(field,  self.config['netG']['input_dim'])
 
             if x_fixed is not None:
-                losses['gauge'] = x_fixed.mean()
+                losses['gauge'] = l1_loss(x_fixed, torch.zeros_like(x_fixed))
             
             # wgan g loss
             global_real_pred, global_fake_pred = self.dis_forward(self.globalD, gt, x2_eval)
