@@ -23,13 +23,13 @@ checkpoints/boundary_1_256/in_94_lightweight/*
 !checkpoints/boundary_1_256/in_94_lightweight/config.yaml
 !checkpoints/boundary_1_256/in_94_lightweight/gen_00600000.pt
 
-checkpoints/boundary_1_256/in_div_curl_1_94_1/*
-!checkpoints/boundary_1_256/in_div_curl_1_94_1/config.yaml
-!checkpoints/boundary_1_256/in_div_curl_1_94_1/gen_00300000.pt
+checkpoints/boundary_1_256/in_div_curl_1_94_1*/*
+!checkpoints/boundary_1_256/in_div_curl_1_94_1*/config.yaml
+!checkpoints/boundary_1_256/in_div_curl_1_94_1*/gen_00300000.pt
 
-checkpoints/boundary_1_256/in_94_scalar_pot/*
-!checkpoints/boundary_1_256/in_94_scalar_pot/config.yaml
-!checkpoints/boundary_1_256/in_94_scalar_pot/gen_00600000.pt
+checkpoints/boundary_1_256/in_94_scalar_pot*/*
+!checkpoints/boundary_1_256/in_94_scalar_pot*/config.yaml
+!checkpoints/boundary_1_256/in_94_scalar_pot*/gen_00600000.pt
 
 checkpoints/boundary_1_256/in_94_2D/*
 !checkpoints/boundary_1_256/in_94_2D/config.yaml
@@ -39,9 +39,9 @@ checkpoints/boundary_1_256/in_94_msp/*
 !checkpoints/boundary_1_256/in_94_msp/config.yaml
 !checkpoints/boundary_1_256/in_94_msp/gen_00500000.pt
 
-checkpoints/boundary_1_256/in_94_sp/*
-!checkpoints/boundary_1_256/in_94_sp/config.yaml
-!checkpoints/boundary_1_256/in_94_sp/gen_00500000.pt
+checkpoints/boundary_1_256/in_94_sp*/*
+!checkpoints/boundary_1_256/in_94_sp*/config.yaml
+!checkpoints/boundary_1_256/in_94_sp*/gen_00500000.pt
 
 checkpoints/paper/*/test
 data/*

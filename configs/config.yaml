@@ -11,11 +11,11 @@ mask_batch_same: True
 max_delta_shape: [16,16]
 margin: [4, 4]
 div_loss: True
-curl_loss: True
+curl_loss: False
 msp_loss: False
 coarse_G: False
 wandb: True
-x2_bnd: True
+x2_bnd: False
 exp_name: 'in_94_sp'
 
 # Costum parameter for magnetic field prediction
@@ -49,11 +49,14 @@ gan_loss_alpha: 0.001
 wgan_gp_lambda: 10
 div_loss_alpha: 500
 curl_loss_alpha: 30000
+gauge_loss_alpha: 1
 
 # network parameters
 netG:
   input_dim: 2
   ngf: 32
+  scalar_potential: True
+  gauge: True
 
 netD:
   input_dim: 2
