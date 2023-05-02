@@ -13,7 +13,7 @@ margin: [4, 4]
 div_loss: True
 curl_loss: True
 coarse_G: True
-wandb: True
+wandb: False
 perc_bnd: True
 exp_name: 'in_96_l1_perc'
 
