@@ -142,7 +142,15 @@ def main():
                 ground_truth = ground_truth[:,:,:,:,1]
             
             bboxes = random_bbox(config, rng=rng)
-            x, mask, _ = mask_image(ground_truth, bboxes, config, bnd=config['boundary'])
+            # perc = np.random.uniform(5,101,95)
+            percentages = np.arange(1,101,1)
+            if config['perc_bnd']:
+                perc = int(np.random.normal(50, 10))
+                while perc not in percentages:
+                    perc = int(np.random.normal(50, 10))
+            else:
+                perc = 100
+            x, mask, _ = mask_image(ground_truth, bboxes, config, bnd=config['boundary'], perc=perc)
 
             (t,l,h,w) = bboxes[0,0]
             ground_truth = ground_truth[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]

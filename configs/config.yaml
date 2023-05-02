@@ -14,6 +14,7 @@ div_loss: True
 curl_loss: True
 coarse_G: True
 wandb: True
+perc_bnd: True
 exp_name: '_with_coarse_and_l1'
 
 # Costum parameter for magnetic field prediction
