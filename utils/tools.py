@@ -299,8 +299,7 @@ def mask_image(x, bboxes, config, bnd=None, perc = 100):
         original = x[
             :,:,
             t - bnd:t + h + bnd,
-            l - bnd:l + w + bnd,
-            1
+            l - bnd:l + w + bnd
         ]
         result = original * (1. - mask)
 
