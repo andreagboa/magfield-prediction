@@ -50,9 +50,8 @@ for perc in percentages:
         # Make box 
         config = get_config(Path(exp_path, 'config.yaml'))
         bboxes = random_bbox(config, rng=rng)
-        x, mask, orig = mask_image(np.array([field]), bboxes, config, bnd=config['boundary'])
-        # mask = random_bnd(mask, perc)
-        mask = random_bnd2(mask, perc)
+        # x, mask, orig = mask_image(np.array([field]), bboxes, config, bnd=config['boundary'])
+        x, mask, orig = mask_image(np.array([field]), bboxes, config, bnd=config['boundary'], perc = perc)
 
         # print(x.shape)
         # Plot box made
