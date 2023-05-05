@@ -16,6 +16,8 @@ from utils.dataset import MagneticFieldDataset
 from utils.tools import get_config, random_bbox, mask_image
 from utils.logger import get_logger
 
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.colors as col
 
@@ -218,8 +220,8 @@ def main():
                 fig, axes = plt.subplots(nrows=config['netG']['input_dim'], 
                                          ncols=3, sharex=True, sharey=True)
                 viz_list = [
-                    ('Truth_X', gt[0,0]), (mode + 'paint_X', res[0,0]), ('Error_X', err[0,0]),
-                    ('Truth_Y', gt[0,1]), (mode + 'paint_Y', res[0,1]), ('Error_Y', err[0,1])
+                    ('Truth_X', gt[0,0]), (mode + 'paint_X_' + str(perc) + '%', res[0,0]), ('Error_X', err[0,0]),
+                    ('Truth_Y', gt[0,1]), (mode + 'paint_Y_' + str(perc) + '%', res[0,1]), ('Error_Y', err[0,1])
                 ]                
                 if config['netG']['input_dim'] == 3:
                     viz_list.extend([
