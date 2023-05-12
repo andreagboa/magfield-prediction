@@ -39,9 +39,17 @@ checkpoints/boundary_1_256/in_94_sp/*
 !checkpoints/boundary_1_256/in_94_sp/config.yaml
 !checkpoints/boundary_1_256/in_94_sp/gen_00500000.pt
 
-checkpoints/boundary_1_256/in_96_l1_perc/*
-!checkpoints/boundary_1_256/in_96_l1_perc/config.yaml
-!checkpoints/boundary_1_256/in_96_l1_perc/gen_00500000.pt
+checkpoints/boundary_1_256/in_94_l1_perc/*
+!checkpoints/boundary_1_256/in_94_l1_perc/config.yaml
+!checkpoints/boundary_1_256/in_94_l1_perc/gen_00500000.pt
+
+checkpoints/boundary_1_256/in_94_perc_uniform/*
+!checkpoints/boundary_1_256/in_94_perc_uniform/config.yaml
+!checkpoints/boundary_1_256/in_94_perc_uniform/gen_00500000.pt
+
+checkpoints/boundary_1_256/in_94_sp_gauge/*
+!checkpoints/boundary_1_256/in_94_sp_gauge/config.yaml
+!checkpoints/boundary_1_256/in_94_sp_gauge/gen_00500000.pt
 
 checkpoints/paper/*/test
 data/*

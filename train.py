@@ -145,11 +145,12 @@ def main():
             
             bboxes = random_bbox(config, rng=rng)
             # perc = np.random.uniform(5,101,95)
-            percentages = np.arange(1,101,1)
+            # percentages = np.arange(1,101,1)
             if config['perc_bnd']:
-                perc = int(np.random.normal(50, 10))
-                while perc not in percentages:
-                    perc = int(np.random.normal(50, 10))
+                # perc = int(np.random.normal(50, 10))
+                perc = random.randint(0, 100)
+                # while perc not in percentages:
+                    # perc = int(np.random.normal(50, 10))
             else:
                 perc = 100
             x, mask, _ = mask_image(ground_truth, bboxes, config, bnd=config['boundary'], perc=perc)
@@ -259,8 +260,10 @@ def main():
                         # Extract center layer if three layers are provided
                         if len(ground_truth.shape) == 5:
                             ground_truth = ground_truth[:,:,:,:,1]
-                        bboxes = random_bbox(config) # ADD SEED!!
-                        x, mask, _ = mask_image(ground_truth, bboxes, config)
+                        bboxes = random_bbox(config, rng=rng_val)
+                        x, mask, _ = mask_image(ground_truth, bboxes, config, bnd=config['boundary'])
+                        (t,l,h,w) = bboxes[0,0]
+                        ground_truth = ground_truth[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
 
                         if cuda:
                             x = x.cuda()
