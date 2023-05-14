@@ -6,7 +6,6 @@ import numpy as np
 from pathlib import PurePath, Path
 from argparse import ArgumentParser
 
-
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
@@ -16,14 +15,13 @@ from utils.dataset import MagneticFieldDataset
 from utils.tools import get_config, random_bbox, mask_image
 from utils.logger import get_logger
 
-import matplotlib
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.colors as col
 
 import wandb
 
-#To be able to run from command prompt (changin parameters from config withour actually doing so=)
+# To be able to run from command prompt
+# Changing parameters from config without actually doing so
 parser = ArgumentParser()
 parser.add_argument(
     '--config', type=str,
@@ -40,7 +38,7 @@ def main():
     #To work with WandB
     if config['wandb']:
         run = wandb.init(
-            project="wgan-gp_bnd1", 
+            project="wgan-gp_scalar", 
             entity="andreathesis",
             config=config
         )
@@ -55,24 +53,22 @@ def main():
         cudnn.benchmark = True
 
     # Configure checkpoint path
-    exp_name = 'test_' + config['exp_name'] if config['test'] else config['exp_name']
-    cp_path = Path(__file__).parent.resolve() / 'checkpoints' / config['dataset_name'] / exp_name
+    cp_path = Path(__file__).parent.resolve() / 'checkpoints' / config['dataset_name'] / config['exp_name']
+    if config['test']: cp_path /= 'test'
     if not cp_path.exists():
         cp_path.mkdir(parents=True)
-    elif config['resume'] is None:
+    elif config['resume'] is None and not config['test']:
         print('Experiment has already been run! Terminating...')
         exit()
     shutil.copy(args.config, cp_path / PurePath(args.config).name)
+    
     logger = get_logger(cp_path)
-    best_score = 1
-
     logger.info("Arguments: {}".format(args))
     if args.seed is None: args.seed = random.randint(1, 10000)
     logger.info("Random seed: {}".format(args.seed))
     random.seed(args.seed)
     torch.manual_seed(args.seed)
     if cuda: torch.cuda.manual_seed_all(args.seed)
-
     logger.info("Configuration: {}".format(config))
 
     try:  # for unexpected error logging
@@ -108,9 +104,6 @@ def main():
         logger.info("\n{}".format(trainer.netG))
         logger.info("\n{}".format(trainer.globalD))
         
-        # WandB
-        # wandb.watch(trainer, log_freq=1, log='all')
-
         if cuda:
             trainer = nn.parallel.DataParallel(trainer, device_ids=device_ids)
             trainer_module = trainer.module
@@ -126,7 +119,9 @@ def main():
         l1_loss = nn.L1Loss()
         
         rng = np.random.default_rng(0)
+        rng_val = np.random.default_rng(1)
         time_count = time.time()
+        best_score = 1
         
         for iteration in range(start_iteration, config['niter'] + 1):
             try:
@@ -144,21 +139,14 @@ def main():
                 ground_truth = ground_truth[:,:,:,:,1]
             
             bboxes = random_bbox(config, rng=rng)
-            # perc = np.random.uniform(5,101,95)
-            # percentages = np.arange(1,101,1)
-            if config['perc_bnd']:
-                # perc = int(np.random.normal(50, 10))
-                perc = random.randint(0, 100)
-                # while perc not in percentages:
-                    # perc = int(np.random.normal(50, 10))
-            else:
-                perc = 100
-            x, mask, _ = mask_image(ground_truth, bboxes, config, bnd=config['boundary'], perc=perc)
+            x, mask, _ = mask_image(ground_truth, bboxes, config, bnd=config['boundary'])
 
             (t,l,h,w) = bboxes[0,0]
             ground_truth = ground_truth[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
-            gt_top = gt_top[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
-            gt_bottom = gt_bottom[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
+            
+            if config['netG']['input_dim'] == 3:
+                gt_top = gt_top[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
+                gt_bottom = gt_bottom[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
 
             if cuda: #in pytorch lightning this happens "in the backgorund", for pytorch you have to specify it (sends tensor to GPU)
                 x = x.cuda()
@@ -192,6 +180,7 @@ def main():
                             + losses['wgan_g'] * config['gan_loss_alpha']
                 if config['div_loss']: losses['g'] += losses['div'] * config['div_loss_alpha']
                 if config['curl_loss']: losses['g'] += losses['curl'] * config['curl_loss_alpha']
+                if config['netG']['gauge']: losses['g'] += losses['gauge'] * config['gauge_loss_alpha']
                 losses['g'].backward()
                 trainer_module.optimizer_g.step()
 
@@ -221,8 +210,8 @@ def main():
                 fig, axes = plt.subplots(nrows=config['netG']['input_dim'], 
                                          ncols=3, sharex=True, sharey=True)
                 viz_list = [
-                    ('Truth_X', gt[0,0]), (mode + 'paint_X_' + str(perc) + '%', res[0,0]), ('Error_X', err[0,0]),
-                    ('Truth_Y', gt[0,1]), (mode + 'paint_Y_' + str(perc) + '%', res[0,1]), ('Error_Y', err[0,1])
+                    ('Truth_X', gt[0,0]), (mode + 'paint_X', res[0,0]), ('Error_X', err[0,0]),
+                    ('Truth_Y', gt[0,1]), (mode + 'paint_Y', res[0,1]), ('Error_Y', err[0,1])
                 ]                
                 if config['netG']['input_dim'] == 3:
                     viz_list.extend([
@@ -257,7 +246,6 @@ def main():
                             iterable_val_loader = iter(val_loader)
                             ground_truth = next(iterable_val_loader)
                         
-                        # Extract center layer if three layers are provided
                         if len(ground_truth.shape) == 5:
                             ground_truth = ground_truth[:,:,:,:,1]
                         bboxes = random_bbox(config, rng=rng_val)
@@ -271,8 +259,8 @@ def main():
                             ground_truth = ground_truth.cuda()
 
                         # Inference
-                        _, x2 = trainer_module.netG(x, mask)
-                        if config['outpaint']:
+                        _, x2, _ = trainer_module.netG(x, mask)
+                        if config['outpaint'] or config['x2_bnd']:
                             x2_eval = x2
                         else:
                             x2_eval = x2 * mask + x * (1. - mask)

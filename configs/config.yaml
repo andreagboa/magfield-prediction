@@ -3,7 +3,7 @@ dataset_name: boundary_1_256
 train_data: bnd_256/magfield_256_large.h5
 val_data: magfield_val_256.h5
 test: False
-resume: 80000
+resume: 
 batch_size: 150
 image_shape: [3, 256, 256]
 mask_shape: [94, 94]
