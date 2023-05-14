@@ -20,9 +20,9 @@ class Generator(nn.Module):
 
     def forward(self, x, mask):
         x_stage1 = self.coarse_generator(x, mask) if self.coarse_G else None
-        x_stage2 = self.fine_generator(x, x_stage1, mask)
+        x_stage2, x_fixed = self.fine_generator(x, x_stage1, mask)
 
-        return x_stage1, x_stage2
+        return x_stage1, x_stage2, x_fixed
 
 
 class CoarseGenerator(nn.Module):
@@ -154,8 +154,11 @@ class FineGenerator(nn.Module):
         x = self.allconv17(x)
         x_stage2 = x
 
-        return x_stage2
-
+        x_fixed= None
+        if self.gauge:
+            x_fixed = x[:,:,0,0]
+        
+        return x_stage2, x_fixed
 
 class LocalDis(nn.Module):
     def __init__(self, config, mask_shape, image_shape, outpaint, box_patch, mode, use_cuda=True, device_ids=None):

@@ -101,6 +101,9 @@ class Trainer(nn.Module):
                     div_mag = torch.stack([Hx_x, Hy_y], dim=1)
                 losses['div'] = torch.mean(torch.abs(div_mag.sum(dim=1)))
 
+            if x_fixed is not None:
+                losses['gauge'] = l1_loss(x_fixed, torch.zeros_like(x_fixed))
+            
             # Curl
             if self.config['curl_loss']:
                 Hx_y = torch.gradient(field[:,0], dim=1)[0]
