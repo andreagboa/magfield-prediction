@@ -13,7 +13,7 @@ margin: [4, 4]
 div_loss: True
 curl_loss: True
 coarse_G: False
-wandb: True
+wandb: False
 perc_bnd: True
 exp_name: 'in_94_perc_uniform'
 
@@ -34,7 +34,7 @@ beta1: 0.5
 beta2: 0.9
 n_critic: 5
 niter: 500000
-print_iter: 5000
+print_iter: 1
 viz_iter: 5000
 snapshot_save_iter: 20000
 valid_iter: 2500
