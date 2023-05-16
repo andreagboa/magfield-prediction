@@ -137,30 +137,35 @@ def main():
                 gt_top = ground_truth[:,:,:,:,0]
                 gt_bottom = ground_truth[:,:,:,:,2]
                 ground_truth = ground_truth[:,:,:,:,1]
-            
+
             bboxes = random_bbox(config, rng=rng)
-            x, mask, _ = mask_image(ground_truth, bboxes, config, bnd=config['boundary'])
+
+            if config['uncond']:
+                mask = None
+            else:
+                x, mask, _ = mask_image(ground_truth, bboxes, config, bnd=config['boundary'])
+                if cuda: mask = mask.cuda()
 
             (t,l,h,w) = bboxes[0,0]
             ground_truth = ground_truth[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
+            
+            if config['uncond']:
+                x = torch.zeros(size=(config['batch_size'], config['netG']['input_dim'], h + 2*config['boundary'], w + 2*config['boundary']))
             
             if config['netG']['input_dim'] == 3:
                 gt_top = gt_top[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
                 gt_bottom = gt_bottom[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
 
-            if cuda: #in pytorch lightning this happens "in the backgorund", for pytorch you have to specify it (sends tensor to GPU)
+            if cuda:
                 x = x.cuda()
-                mask = mask.cuda()
                 ground_truth = ground_truth.cuda()
-
                 if gt_top is not None:
                     gt_top = gt_top.cuda()
                     gt_bottom = gt_bottom.cuda()
-                
             
             ###### Forward pass ######
             compute_g_loss = iteration % config['n_critic'] == 0
-            losses, inpainted_result, gen_result = trainer(x, bboxes, mask, 
+            losses, inpainted_result, _ = trainer(x, mask, 
                 ground_truth, gt_top, gt_bottom, compute_g_loss)
             # Scalars from different devices are gathered into vectors
             for k in losses.keys():
@@ -175,9 +180,12 @@ def main():
             # Update G
             if compute_g_loss:
                 trainer_module.optimizer_g.zero_grad()
-                losses['g'] = losses['l1'] * config['l1_loss_alpha'] \
-                            + losses['ae'] * config['ae_loss_alpha'] \
-                            + losses['wgan_g'] * config['gan_loss_alpha']
+                if config['uncond']:
+                    losses['g'] = losses['wgan_g'] * config['gan_loss_alpha']
+                else:
+                    losses['g'] = losses['l1'] * config['l1_loss_alpha'] \
+                                + losses['ae'] * config['ae_loss_alpha'] \
+                                + losses['wgan_g'] * config['gan_loss_alpha']
                 if config['div_loss']: losses['g'] += losses['div'] * config['div_loss_alpha']
                 if config['curl_loss']: losses['g'] += losses['curl'] * config['curl_loss_alpha']
                 if config['netG']['gauge']: losses['g'] += losses['gauge'] * config['gauge_loss_alpha']
@@ -248,23 +256,40 @@ def main():
                         
                         if len(ground_truth.shape) == 5:
                             ground_truth = ground_truth[:,:,:,:,1]
+
                         bboxes = random_bbox(config, rng=rng_val)
-                        x, mask, _ = mask_image(ground_truth, bboxes, config, bnd=config['boundary'])
+
+                        if config['uncond']:
+                            x = None
+                            mask = None
+                        else:
+                            x, mask, _ = mask_image(ground_truth, bboxes, config, bnd=config['boundary'])
+                            if cuda: mask = mask.cuda()
+                        
                         (t,l,h,w) = bboxes[0,0]
                         ground_truth = ground_truth[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
 
+                        if config['uncond']:
+                            x = torch.zeros(size=(config['batch_size'], config['netG']['input_dim'], h + 2*config['boundary'], w + 2*config['boundary']))
+
                         if cuda:
                             x = x.cuda()
-                            mask = mask.cuda()
                             ground_truth = ground_truth.cuda()
 
                         # Inference
                         _, x2, _ = trainer_module.netG(x, mask)
                         if config['outpaint'] or config['x2_bnd']:
                             x2_eval = x2
+                        elif config['uncond']:
+                            x2_eval = x2[:,:,:,:,1]
                         else:
                             x2_eval = x2 * mask + x * (1. - mask)
-                        val_loss.append(l1_loss(x2_eval, ground_truth))
+
+                        if config['uncond']:
+                            global_real_pred, global_fake_pred = trainer_module.dis_forward(trainer_module.globalD, ground_truth, x2_eval.detach())
+                            val_loss.append(torch.mean(global_fake_pred - global_real_pred) * config['global_wgan_loss_alpha'])
+                        else:
+                            val_loss.append(l1_loss(x2_eval, ground_truth))
 
                     val_err = sum(val_loss) / len(val_loss)
                     if config['wandb']: wandb.log({"L1-loss (val)": val_err})

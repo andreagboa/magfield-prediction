@@ -22,12 +22,14 @@ class Trainer(nn.Module):
         self.mode = self.config['mode']
         self.coarse_G = self.config['coarse_G']
         self.x2_bnd = self.config['x2_bnd']
+        self.uncond = self.config['uncond']
 
         self.netG = Generator(
             self.config['netG'],
             self.config['coarse_G'],
+            self.config['uncond'],
             self.use_cuda,
-            self.device_ids
+            self.device_ids,
         )
         self.globalD = GlobalDis(
             self.config['netD'],
@@ -55,7 +57,7 @@ class Trainer(nn.Module):
             self.netG.to(self.device_ids[0])
             self.globalD.to(self.device_ids[0])
 
-    def forward(self, x, bboxes, mask, gt, gt_top, gt_bottom, compute_loss_g=False):
+    def forward(self, x, mask, gt, gt_top, gt_bottom, compute_loss_g=False):
         self.train()
         l1_loss = nn.L1Loss()
         losses = {}
@@ -67,7 +69,11 @@ class Trainer(nn.Module):
         else:
             if x1 is not None: x1_eval = x1 * mask + x * (1. - mask)
             # Change to Boolean x2_eval = x2 if True
-            if self.x2_bnd: 
+            if self.uncond:
+                x2_eval = x2[:,:,:,:,1]
+                x2_top = x2[:,:,:,:,0]
+                x2_bottom = x2[:,:,:,:,2]
+            elif self.x2_bnd: 
                 x2_eval = x2 
             else: 
                 x2_eval = x2 * mask + x * (1. - mask)
@@ -83,22 +89,26 @@ class Trainer(nn.Module):
 
         # G part
         if compute_loss_g:
-            losses['l1'] = l1_loss(x2 * mask, gt * mask)
-            losses['ae'] = l1_loss(x2 * (1. - mask), gt * (1. - mask))
-            if x1 is not None:
-                losses['l1'] += l1_loss(x1_eval, gt) * self.config['coarse_l1_alpha']
-                losses['ae'] += l1_loss(x1 * (1. - mask), gt * (1. - mask)) * self.config['coarse_l1_alpha']
+            if not self.uncond:
+                losses['l1'] = l1_loss(x2 * mask, gt * mask)
+                losses['ae'] = l1_loss(x2 * (1. - mask), gt * (1. - mask))
+                if x1 is not None:
+                    losses['l1'] += l1_loss(x1_eval, gt) * self.config['coarse_l1_alpha']
+                    losses['ae'] += l1_loss(x1 * (1. - mask), gt * (1. - mask)) * self.config['coarse_l1_alpha']
 
             # Shape: bs x comp x res_h (y) x res_w (x) x z
             if self.config['netG']['input_dim'] == 3:
-                field = torch.cat([gt_top.unsqueeze(-1), x2_eval.unsqueeze(-1), gt_bottom.unsqueeze(-1)], dim=-1)
+                if self.uncond:
+                    field = torch.cat([x2_top.unsqueeze(-1), x2_eval.unsqueeze(-1), x2_bottom.unsqueeze(-1)], dim=-1)
+                else:
+                    field = torch.cat([gt_top.unsqueeze(-1), x2_eval.unsqueeze(-1), gt_bottom.unsqueeze(-1)], dim=-1)
             else:
                 field = x2_eval
             
             if self.config['div_loss']: 
-                losses['div'] = calc_div(field,  self.config['netG']['input_dim'])
+                losses['div'] = calc_div(field, self.config['netG']['input_dim'])
             if self.config['curl_loss']:
-                losses['curl'] = calc_curl(field,  self.config['netG']['input_dim'])
+                losses['curl'] = calc_curl(field, self.config['netG']['input_dim'])
 
             if x_fixed is not None:
                 losses['gauge'] = l1_loss(x_fixed, torch.zeros_like(x_fixed))

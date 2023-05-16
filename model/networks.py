@@ -3,13 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils import spectral_norm as spectral_norm_fn
 from torch.nn.utils import weight_norm as weight_norm_fn
-<<<<<<< HEAD
-=======
-
->>>>>>> 45d116385ce3c04d573bd0193c8e2965c9a5f3f7
 
 class Generator(nn.Module):
-    def __init__(self, config, coarse_G, use_cuda, device_ids):
+    def __init__(self, config, coarse_G, uncond, use_cuda, device_ids):
         super(Generator, self).__init__()
         self.input_dim = config['input_dim']
         self.cnum = config['ngf']
@@ -18,10 +14,13 @@ class Generator(nn.Module):
         self.gauge = config['gauge']
         self.use_cuda = use_cuda
         self.device_ids = device_ids
+        self.uncond = uncond
+
+        if self.uncond: self.coarse_G = False
 
         if self.coarse_G:
             self.coarse_generator = CoarseGenerator(self.input_dim, self.cnum, self.use_cuda, self.device_ids)
-        self.fine_generator = FineGenerator(self.input_dim, self.cnum, self.msp, self.gauge, self.use_cuda, self.device_ids)
+        self.fine_generator = FineGenerator(self.input_dim, self.cnum, self.msp, self.gauge, self.uncond, self.use_cuda, self.device_ids)
 
     def forward(self, x, mask):
         x_stage1 = self.coarse_generator(x, mask) if self.coarse_G else None
@@ -94,23 +93,29 @@ class CoarseGenerator(nn.Module):
 
 
 class FineGenerator(nn.Module):
-    def __init__(self, input_dim, cnum, msp=False, gauge=False, use_cuda=True, device_ids=None):
+    def __init__(self, input_dim, cnum, msp=False, gauge=False, uncond=False, use_cuda=True, device_ids=None):
         super(FineGenerator, self).__init__()
         self.use_cuda = use_cuda
         self.device_ids = device_ids
         self.gauge = gauge
+        self.uncond = uncond
         self.msp = msp
-        # 3 x 256 x 256
-        self.conv1 = gen_conv(input_dim + 2, cnum, 5, 1, 2)
-        self.conv2_downsample = gen_conv(cnum, cnum, 3, 2, 1)
-        # cnum*2 x 128 x 128
-        self.conv3 = gen_conv(cnum, cnum*2, 3, 1, 1)
-        self.conv4_downsample = gen_conv(cnum*2, cnum*2, 3, 2, 1)
-        # cnum*4 x 64 x 64
-        self.conv5 = gen_conv(cnum*2, cnum*4, 3, 1, 1)
-        self.conv6 = gen_conv(cnum*4, cnum*4, 3, 1, 1)
 
-        self.conv7_atrous = gen_conv(cnum*4, cnum*4, 3, 1, 2, rate=2)
+        if self.uncond:
+            self.conv7_atrous = gen_conv(input_dim, cnum*4, 3, 1, 2, rate=2)
+        else:
+            # 3 x in_dim x in_dim
+            self.conv1 = gen_conv(input_dim + 2, cnum, 5, 1, 2)
+            self.conv2_downsample = gen_conv(cnum, cnum, 3, 2, 1)
+            # cnum*2 x in_dim // 2 x in_dim // 2
+            self.conv3 = gen_conv(cnum, cnum*2, 3, 1, 1)
+            self.conv4_downsample = gen_conv(cnum*2, cnum*2, 3, 2, 1)
+            # cnum*4 x in_dim // 4 x in_dim // 4
+            self.conv5 = gen_conv(cnum*2, cnum*4, 3, 1, 1)
+            self.conv6 = gen_conv(cnum*4, cnum*4, 3, 1, 1)
+
+            self.conv7_atrous = gen_conv(cnum*4, cnum*4, 3, 1, 2, rate=2)
+
         self.conv8_atrous = gen_conv(cnum*4, cnum*4, 3, 1, 4, rate=4)
         self.conv9_atrous = gen_conv(cnum*4, cnum*4, 3, 1, 8, rate=8)
         self.conv10_atrous = gen_conv(cnum*4, cnum*4, 3, 1, 16, rate=16)
@@ -122,32 +127,35 @@ class FineGenerator(nn.Module):
         self.allconv15 = gen_conv(cnum*2, cnum, 3, 1, 1)
         self.allconv16 = gen_conv(cnum, cnum//2, 3, 1, 1)
 
-        if self.msp:
-            self.allconv17 = gen_conv(cnum//2, 1, 3, 1, 1, activation='none')
-        else:
-            self.allconv17 = gen_conv(cnum//2, input_dim, 3, 1, 1, activation='none')
+        output_dim = 1 if self.msp else input_dim
+        if self.uncond: output_dim *= 3
+        self.allconv17 = gen_conv(cnum//2, output_dim, 3, 1, 1, activation='none')
 
 
     def forward(self, xin, x_stage1, mask):
-        # For indicating the boundaries of images
-        ones = torch.ones(xin.size(0), 1, xin.size(2), xin.size(3))
-        if self.use_cuda:
-            ones = ones.cuda()
-            mask = mask.cuda()
-
-        if x_stage1 is not None:
-            x1_inpaint = x_stage1 * mask + xin * (1. - mask)
-            # conv branch
-            xnow = torch.cat([x1_inpaint, ones, mask], dim=1)
+        if self.uncond:
+            x = torch.normal(0, 1, size=(xin.size(0), xin.size(1), xin.size(2)//4, xin.size(3)//4))
+            if self.use_cuda: x = x.cuda()
         else:
-            xnow = torch.cat([xin, ones, mask], dim=1)
+            # For indicating the boundaries of images
+            ones = torch.ones(xin.size(0), 1, xin.size(2), xin.size(3))
+            if self.use_cuda:
+                ones = ones.cuda()
+                mask = mask.cuda()
+            if x_stage1 is not None:
+                x1_inpaint = x_stage1 * mask + xin * (1. - mask)
+                # conv branch
+                xnow = torch.cat([x1_inpaint, ones, mask], dim=1)
+            else:
+                xnow = torch.cat([xin, ones, mask], dim=1)
 
-        x = self.conv1(xnow)
-        x = self.conv2_downsample(x)
-        x = self.conv3(x)
-        x = self.conv4_downsample(x)
-        x = self.conv5(x)
-        x = self.conv6(x)
+            x = self.conv1(xnow)
+            x = self.conv2_downsample(x)
+            x = self.conv3(x)
+            x = self.conv4_downsample(x)
+            x = self.conv5(x)
+            x = self.conv6(x)
+        
         x = self.conv7_atrous(x)
         x = self.conv8_atrous(x)
         x = self.conv9_atrous(x)
@@ -164,19 +172,35 @@ class FineGenerator(nn.Module):
 
         x_fixed = None
         if self.msp:
+            if self.uncond:
+                x_top = x[:,0:1]
+                x_bottom = x[:,2:3]
+                x = x[:,1:2]
+        
             if self.gauge:
                 x_fixed = x[:,:,0,0]
             else:
                 # Magnetic scalar potential is relative up to a constant
                 sp_min = x.reshape((xin.size(0),-1)).min(dim=1)[0].unsqueeze(1).unsqueeze(2).unsqueeze(3)
                 x = torch.sub(x, sp_min)
+                if self.uncond:
+                    x_top = torch.sub(x_top, sp_min)
+                    x_bottom = torch.sub(x_bottom, sp_min)
 
-            grad_x = (-1) * torch.gradient(x, dim=-1, edge_order=2)[0]
-            grad_y = (-1) * torch.gradient(x, dim=-2, edge_order=2)[0]
-            rec_field = torch.cat([grad_x, grad_y], dim=1)
+            if self.uncond:
+                msp = torch.cat([x_top.unsqueeze(-1), x.unsqueeze(-1), x_bottom.unsqueeze(-1)], dim=-1)
+                grad_x = (-1) * torch.gradient(msp, dim=-2, edge_order=2)[0]
+                grad_y = (-1) * torch.gradient(msp, dim=-3, edge_order=2)[0]
+                grad_z = (-1) * torch.gradient(msp, dim=-1, edge_order=2)[0]
+                rec_field = torch.cat([grad_x, grad_y, grad_z], dim=1)
+            else:
+                grad_x = (-1) * torch.gradient(x, dim=-1, edge_order=2)[0]
+                grad_y = (-1) * torch.gradient(x, dim=-2, edge_order=2)[0]
+                rec_field = torch.cat([grad_x, grad_y], dim=1)
 
         else:
-            rec_field = x
+            # 9 x in_dim x in_dim
+            rec_field = x.reshape((xin.size(0), xin.size(1), xin.size(2), xin.size(3), 3))
 
         return rec_field, x_fixed
 
