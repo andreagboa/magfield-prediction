@@ -4,7 +4,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch import autograd
 
-from model.networks import Generator, GlobalDis
+# from model.networks import Generator, GlobalDis
+from model.networks_orig import Generator, GlobalDis
 from utils.tools import get_model_list, calc_div, calc_curl
 from utils.logger import get_logger
 
@@ -57,7 +58,7 @@ class Trainer(nn.Module):
             self.netG.to(self.device_ids[0])
             self.globalD.to(self.device_ids[0])
 
-    def forward(self, x, mask, gt, gt_top, gt_bottom, compute_loss_g=False):
+    def forward(self, x, mask, gt, grad_z, compute_loss_g=False):
         self.train()
         l1_loss = nn.L1Loss()
         losses = {}
@@ -70,9 +71,9 @@ class Trainer(nn.Module):
             if x1 is not None: x1_eval = x1 * mask + x * (1. - mask)
             # Change to Boolean x2_eval = x2 if True
             if self.uncond:
-                x2_eval = x2[:,:,:,:,1]
-                x2_top = x2[:,:,:,:,0]
-                x2_bottom = x2[:,:,:,:,2]
+                x2_eval = x2 # [:,:,:,:,1]
+            #     x2_top = x2[:,:,:,:,0]
+            #     x2_bottom = x2[:,:,:,:,2]
             elif self.x2_bnd: 
                 x2_eval = x2 
             else: 
@@ -95,20 +96,11 @@ class Trainer(nn.Module):
                 if x1 is not None:
                     losses['l1'] += l1_loss(x1_eval, gt) * self.config['coarse_l1_alpha']
                     losses['ae'] += l1_loss(x1 * (1. - mask), gt * (1. - mask)) * self.config['coarse_l1_alpha']
-
-            # Shape: bs x comp x res_h (y) x res_w (x) x z
-            if self.config['netG']['input_dim'] == 3:
-                if self.uncond:
-                    field = torch.cat([x2_top.unsqueeze(-1), x2_eval.unsqueeze(-1), x2_bottom.unsqueeze(-1)], dim=-1)
-                else:
-                    field = torch.cat([gt_top.unsqueeze(-1), x2_eval.unsqueeze(-1), gt_bottom.unsqueeze(-1)], dim=-1)
-            else:
-                field = x2_eval
             
             if self.config['div_loss']: 
-                losses['div'] = calc_div(field, self.config['netG']['input_dim'])
+                losses['div'] = calc_div(x2_eval, None)
             if self.config['curl_loss']:
-                losses['curl'] = calc_curl(field, self.config['netG']['input_dim'])
+                losses['curl'] = calc_curl(x2_eval, None)
 
             if x_fixed is not None:
                 losses['gauge'] = l1_loss(x_fixed, torch.zeros_like(x_fixed))
@@ -119,10 +111,10 @@ class Trainer(nn.Module):
 
         return losses, x2_eval, x2
 
-    def dis_forward(self, netD, ground_truth, x_inpaint):
-        assert ground_truth.size() == x_inpaint.size()
-        batch_size = ground_truth.size(0)
-        batch_data = torch.cat([ground_truth, x_inpaint], dim=0)
+    def dis_forward(self, netD, gt, x_inpaint):
+        assert gt.size() == x_inpaint.size()
+        batch_size = gt.size(0)
+        batch_data = torch.cat([gt, x_inpaint], dim=0)
         batch_output = netD(batch_data)
         real_pred, fake_pred = torch.split(batch_output, batch_size, dim=0)
 

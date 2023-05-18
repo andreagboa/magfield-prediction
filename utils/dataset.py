@@ -5,10 +5,11 @@ import h5py
 
 
 class MagneticFieldDataset(torch.utils.data.Dataset):
-    def __init__(self, datapath, scaling):
+    def __init__(self, datapath, scaling, volume=None):
         super(MagneticFieldDataset, self).__init__()
         self.db_path = datapath
         self.scaling = scaling
+        self.volume = volume
         self.size = h5py.File(self.db_path, mode='r')['field'].shape[0]
  
     def open_hdf5(self):
@@ -17,8 +18,23 @@ class MagneticFieldDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         if not hasattr(self, 'db'):
             self.open_hdf5()
+    
+        f = self.db['field'][idx]
+        if self.volume is not None:
+            f_t = torch.from_numpy(f.astype('float32'))
+            grad_z = torch.tensor([0])
+        elif len(f.shape) == 4:
+            fx_z = np.gradient(f[0], axis=2)[:,:,1]
+            fy_z = np.gradient(f[1], axis=2)[:,:,1]
+            fz_z = np.gradient(f[2], axis=2)[:,:,1]
+            grad_z = np.stack((fx_z, fy_z, fz_z), axis=0)
+            grad_z = torch.from_numpy(grad_z.astype('float32'))
+            f_t = torch.from_numpy(f[:,:,:,1].astype('float32'))
+        else:
+            f_t = torch.from_numpy(f.astype('float32'))
+            grad_z = torch.tensor([0])
 
-        return torch.from_numpy(self.db['field'][idx].astype('float32')) * self.scaling
+        return f_t * self.scaling, grad_z
 
     def __len__(self):
         return self.size

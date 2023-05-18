@@ -127,24 +127,30 @@ class FineGenerator(nn.Module):
         self.allconv15 = gen_conv(cnum*2, cnum, 3, 1, 1)
         self.allconv16 = gen_conv(cnum, cnum//2, 3, 1, 1)
 
-        output_dim = 1 if self.msp else input_dim
-        if self.uncond: output_dim *= 3
+        if self.msp and input_dim == 2:
+            output_dim = 1
+        # Gradient of scalar potential in z-direction is predicted as well
+        # TODO 3D scalar potential with 3D convolutions
+        elif self.msp and input_dim == 3:
+            output_dim = 2
+        else:
+            output_dim = input_dim
+        
         self.allconv17 = gen_conv(cnum//2, output_dim, 3, 1, 1, activation='none')
 
 
     def forward(self, xin, x_stage1, mask):
         if self.uncond:
-            x = torch.normal(0, 1, size=(xin.size(0), xin.size(1), xin.size(2)//4, xin.size(3)//4))
-            if self.use_cuda: x = x.cuda()
+            x = xin
         else:
             # For indicating the boundaries of images
+            # TODO Check if necessary
             ones = torch.ones(xin.size(0), 1, xin.size(2), xin.size(3))
             if self.use_cuda:
                 ones = ones.cuda()
                 mask = mask.cuda()
             if x_stage1 is not None:
                 x1_inpaint = x_stage1 * mask + xin * (1. - mask)
-                # conv branch
                 xnow = torch.cat([x1_inpaint, ones, mask], dim=1)
             else:
                 xnow = torch.cat([xin, ones, mask], dim=1)
@@ -172,35 +178,25 @@ class FineGenerator(nn.Module):
 
         x_fixed = None
         if self.msp:
-            if self.uncond:
-                x_top = x[:,0:1]
-                x_bottom = x[:,2:3]
-                x = x[:,1:2]
-        
+            field = x[:,0]
+            if x.size(1) == 2: grad_z = (-1) * x[:,1]
+
             if self.gauge:
-                x_fixed = x[:,:,0,0]
+                x_fixed = field[:,0,0]
             else:
                 # Magnetic scalar potential is relative up to a constant
-                sp_min = x.reshape((xin.size(0),-1)).min(dim=1)[0].unsqueeze(1).unsqueeze(2).unsqueeze(3)
-                x = torch.sub(x, sp_min)
-                if self.uncond:
-                    x_top = torch.sub(x_top, sp_min)
-                    x_bottom = torch.sub(x_bottom, sp_min)
+                sp_min = field.reshape((xin.size(0),-1)).min(dim=1)[0].unsqueeze(1).unsqueeze(2)
+                field = torch.sub(field, sp_min)
 
-            if self.uncond:
-                msp = torch.cat([x_top.unsqueeze(-1), x.unsqueeze(-1), x_bottom.unsqueeze(-1)], dim=-1)
-                grad_x = (-1) * torch.gradient(msp, dim=-2, edge_order=2)[0]
-                grad_y = (-1) * torch.gradient(msp, dim=-3, edge_order=2)[0]
-                grad_z = (-1) * torch.gradient(msp, dim=-1, edge_order=2)[0]
-                rec_field = torch.cat([grad_x, grad_y, grad_z], dim=1)
+            grad_x = (-1) * torch.gradient(field, dim=-1)[0]
+            grad_y = (-1) * torch.gradient(field, dim=-2)[0]
+            if x.size(1) == 2:
+                rec_field = torch.stack([grad_x, grad_y, grad_z], dim=1)
             else:
-                grad_x = (-1) * torch.gradient(x, dim=-1, edge_order=2)[0]
-                grad_y = (-1) * torch.gradient(x, dim=-2, edge_order=2)[0]
-                rec_field = torch.cat([grad_x, grad_y], dim=1)
+                rec_field = torch.stack([grad_x, grad_y], dim=1)
 
         else:
-            # 9 x in_dim x in_dim
-            rec_field = x.reshape((xin.size(0), xin.size(1), xin.size(2), xin.size(3), 3))
+            rec_field = x
 
         return rec_field, x_fixed
 

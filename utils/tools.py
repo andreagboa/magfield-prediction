@@ -363,31 +363,38 @@ def get_model_list(dirname, key, iteration=0, best=False):
     return last_model_name
 
 
-def calc_div(f, in_dim):
+def calc_div(f, grad_z=None, vol=False):
     Hx_x = torch.gradient(f[:,0], dim=2)[0]
     Hy_y = torch.gradient(f[:,1], dim=1)[0]
-    if in_dim == 3:
+
+    if grad_z is None and vol:
         Hz_z = torch.gradient(f[:,2], dim=3)[0]
-        # Taking gradients of center layer only
-        div_mag = torch.stack([Hx_x, Hy_y, Hz_z], dim=1)[:,:,:,:,1]
-    else:                    
+        div_mag = torch.stack([Hx_x, Hy_y, Hz_z], dim=1)
+    elif grad_z is None and not vol:
         div_mag = torch.stack([Hx_x, Hy_y], dim=1)
+    else:
+        div_mag = torch.stack([Hx_x, Hy_y, grad_z[2]], dim=1)
 
     return torch.mean(torch.abs(div_mag.sum(dim=1)))
 
 
-def calc_curl(f, in_dim):
+def calc_curl(f, grad_z=None, vol=False):
     Hx_y = torch.gradient(f[:,0], dim=1)[0]
     Hy_x = torch.gradient(f[:,1], dim=2)[0]
-    if in_dim == 3:
+
+    if grad_z is None and vol:
         Hx_z = torch.gradient(f[:,0], dim=3)[0]
         Hy_z = torch.gradient(f[:,1], dim=3)[0]
         Hz_x = torch.gradient(f[:,2], dim=2)[0]
         Hz_y = torch.gradient(f[:,2], dim=1)[0]
-        # Taking gradients of center layer only
-        curl_vec = torch.stack([Hz_y-Hy_z, Hx_z-Hz_x, Hy_x-Hx_y], dim=1)[:,:,:,:,1]
+        curl_vec = torch.stack([Hz_y-Hy_z, Hx_z-Hz_x, Hy_x-Hx_y], dim=1)
         curl_mag = curl_vec.square().sum(dim=1)
-    else:
+    elif grad_z is None and not vol:
         curl_mag = (Hy_x - Hx_y).square()
+    else:
+        Hz_x = torch.gradient(f[:,2], dim=2)[0]
+        Hz_y = torch.gradient(f[:,2], dim=1)[0]
+        curl_vec = torch.stack([Hz_y - grad_z[1], grad_z[0] - Hz_x, Hy_x - Hx_y], dim=1)
+        curl_mag = curl_vec.square().sum(dim=1)
 
     return torch.mean(curl_mag)

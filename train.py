@@ -34,16 +34,6 @@ parser.add_argument('--seed', type=int, help='manual seed')
 def main():
     args = parser.parse_args()
     config = get_config(args.config)
-
-    #To work with WandB
-    if config['wandb']:
-        run = wandb.init(
-            project="wgan-gp_scalar", 
-            entity="andreathesis",
-            config=config
-        )
-
-    # CUDA configuration
     cuda = config['cuda']
     device_ids = config['gpu_ids']
     if cuda:
@@ -54,14 +44,23 @@ def main():
 
     # Configure checkpoint path
     cp_path = Path(__file__).parent.resolve() / 'checkpoints' / config['dataset_name'] / config['exp_name']
-    if config['test']: cp_path /= 'test'
+    if config['test']:
+        cp_path /= 'test'
     if not cp_path.exists():
         cp_path.mkdir(parents=True)
     elif config['resume'] is None and not config['test']:
         print('Experiment has already been run! Terminating...')
         exit()
     shutil.copy(args.config, cp_path / PurePath(args.config).name)
+
+    if config['wandb'] and not config['test']:
+        run = wandb.init(
+            project="wgan-gp_scalar", 
+            entity="andreathesis",
+            config=config
+        )
     
+    bnd = config['boundary']
     logger = get_logger(cp_path)
     logger.info("Arguments: {}".format(args))
     if args.seed is None: args.seed = random.randint(1, 10000)
@@ -100,6 +99,7 @@ def main():
             num_workers=config['num_workers'],
             drop_last=True
         )
+
         trainer = Trainer(config)
         logger.info("\n{}".format(trainer.netG))
         logger.info("\n{}".format(trainer.globalD))
@@ -125,48 +125,34 @@ def main():
         
         for iteration in range(start_iteration, config['niter'] + 1):
             try:
-                ground_truth = next(iterable_train_loader)
+                gt, grad_z = next(iterable_train_loader)
             except StopIteration:
                 iterable_train_loader = iter(train_loader)
-                ground_truth = next(iterable_train_loader)
-
-            # Prepare the inputs
-            gt_top = None
-            gt_bottom = None
-            if config['netG']['input_dim'] == 3:
-                gt_top = ground_truth[:,:,:,:,0]
-                gt_bottom = ground_truth[:,:,:,:,2]
-                ground_truth = ground_truth[:,:,:,:,1]
-
+                gt, grad_z = next(iterable_train_loader)
+            
             bboxes = random_bbox(config, rng=rng)
 
             if config['uncond']:
                 mask = None
             else:
-                x, mask, _ = mask_image(ground_truth, bboxes, config, bnd=config['boundary'])
+                x, mask, _ = mask_image(gt, bboxes, config, bnd=bnd)
                 if cuda: mask = mask.cuda()
 
             (t,l,h,w) = bboxes[0,0]
-            ground_truth = ground_truth[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
+            gt = gt[:,:,t - bnd:t + h + bnd,l - bnd:l + w + bnd]
             
             if config['uncond']:
-                x = torch.zeros(size=(config['batch_size'], config['netG']['input_dim'], h + 2*config['boundary'], w + 2*config['boundary']))
+                # size_f = (config['batch_size'], gt.shape[1], (h + 2*bnd) // 4, (w + 2*bnd) // 4)
+                x = torch.normal(0, 1, size=(gt.shape[0], config['netG']['latent_dim']))
             
-            if config['netG']['input_dim'] == 3:
-                gt_top = gt_top[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
-                gt_bottom = gt_bottom[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
-
             if cuda:
                 x = x.cuda()
-                ground_truth = ground_truth.cuda()
-                if gt_top is not None:
-                    gt_top = gt_top.cuda()
-                    gt_bottom = gt_bottom.cuda()
+                gt = gt.cuda()
+                grad_z = grad_z.cuda()
             
             ###### Forward pass ######
             compute_g_loss = iteration % config['n_critic'] == 0
-            losses, inpainted_result, _ = trainer(x, mask, 
-                ground_truth, gt_top, gt_bottom, compute_g_loss)
+            losses, inpainted_result, _ = trainer(x, mask, gt, grad_z, compute_g_loss)
             # Scalars from different devices are gathered into vectors
             for k in losses.keys():
                 if not losses[k].dim() == 0: losses[k] = torch.mean(losses[k])
@@ -210,20 +196,20 @@ def main():
                 if config['wandb']: wandb.log(data=losses, step=iteration)
             
             if iteration % (config['viz_iter']) == 0:
-                gt = ground_truth / config['scale_factor']
+                gt_scaled = gt / config['scale_factor']
                 res = inpainted_result / config['scale_factor']
-                err = abs(gt - res)
+                err = abs(gt_scaled - res)
                 mode = 'Out' if config['outpaint'] else 'In'
                 plt.close('all')
                 fig, axes = plt.subplots(nrows=config['netG']['input_dim'], 
                                          ncols=3, sharex=True, sharey=True)
                 viz_list = [
-                    ('Truth_X', gt[0,0]), (mode + 'paint_X', res[0,0]), ('Error_X', err[0,0]),
-                    ('Truth_Y', gt[0,1]), (mode + 'paint_Y', res[0,1]), ('Error_Y', err[0,1])
+                    ('Truth_X', gt_scaled[0,0]), (mode + 'paint_X', res[0,0]), ('Error_X', err[0,0]),
+                    ('Truth_Y', gt_scaled[0,1]), (mode + 'paint_Y', res[0,1]), ('Error_Y', err[0,1])
                 ]                
                 if config['netG']['input_dim'] == 3:
                     viz_list.extend([
-                        ('Truth_Z', gt[0,2]), (mode + 'paint_Z', res[0,2]), ('Error_Z', err[0,2])
+                        ('Truth_Z', gt_scaled[0,2]), (mode + 'paint_Z', res[0,2]), ('Error_Z', err[0,2])
                     ])
 
                 for i, (title, data) in enumerate(viz_list):
@@ -249,47 +235,41 @@ def main():
                     val_loss = []
                     for _ in range(25):
                         try:
-                            ground_truth = next(iterable_val_loader)
+                            gt, _ = next(iterable_val_loader)
                         except StopIteration:
                             iterable_val_loader = iter(val_loader)
-                            ground_truth = next(iterable_val_loader)
-                        
-                        if len(ground_truth.shape) == 5:
-                            ground_truth = ground_truth[:,:,:,:,1]
+                            gt, _ = next(iterable_val_loader)
 
                         bboxes = random_bbox(config, rng=rng_val)
 
                         if config['uncond']:
-                            x = None
+                            x = torch.normal(0, 1, size=(gt.shape[0], config['netG']['latent_dim']))
                             mask = None
                         else:
-                            x, mask, _ = mask_image(ground_truth, bboxes, config, bnd=config['boundary'])
+                            x, mask, _ = mask_image(gt, bboxes, config, bnd=bnd)
                             if cuda: mask = mask.cuda()
                         
                         (t,l,h,w) = bboxes[0,0]
-                        ground_truth = ground_truth[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
-
-                        if config['uncond']:
-                            x = torch.zeros(size=(config['batch_size'], config['netG']['input_dim'], h + 2*config['boundary'], w + 2*config['boundary']))
+                        gt = gt[:,:,t - bnd:t + h + bnd,l - bnd:l + w + bnd]
 
                         if cuda:
                             x = x.cuda()
-                            ground_truth = ground_truth.cuda()
+                            gt = gt.cuda()
 
                         # Inference
                         _, x2, _ = trainer_module.netG(x, mask)
                         if config['outpaint'] or config['x2_bnd']:
                             x2_eval = x2
                         elif config['uncond']:
-                            x2_eval = x2[:,:,:,:,1]
+                            x2_eval = x2 # [:,:,:,:,1]
                         else:
                             x2_eval = x2 * mask + x * (1. - mask)
 
                         if config['uncond']:
-                            global_real_pred, global_fake_pred = trainer_module.dis_forward(trainer_module.globalD, ground_truth, x2_eval.detach())
+                            global_real_pred, global_fake_pred = trainer_module.dis_forward(trainer_module.globalD, gt, x2_eval.detach())
                             val_loss.append(torch.mean(global_fake_pred - global_real_pred) * config['global_wgan_loss_alpha'])
                         else:
-                            val_loss.append(l1_loss(x2_eval, ground_truth))
+                            val_loss.append(l1_loss(x2_eval, gt))
 
                     val_err = sum(val_loss) / len(val_loss)
                     if config['wandb']: wandb.log({"L1-loss (val)": val_err})
