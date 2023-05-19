@@ -13,8 +13,9 @@ margin: [4, 4]
 div_loss: True
 curl_loss: True
 coarse_G: False
-wandb: False
+wandb: True
 perc_bnd: True
+x2_bnd: False
 exp_name: 'in_94_perc_uniform'
 
 # Costum parameter for magnetic field prediction
@@ -34,7 +35,7 @@ beta1: 0.5
 beta2: 0.9
 n_critic: 5
 niter: 500000
-print_iter: 1
+print_iter: 25000
 viz_iter: 5000
 snapshot_save_iter: 20000
 valid_iter: 2500

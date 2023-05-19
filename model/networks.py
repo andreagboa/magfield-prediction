@@ -13,10 +13,11 @@ class Generator(nn.Module):
         self.coarse_G = coarse_G
         self.use_cuda = use_cuda
         self.device_ids = device_ids
+        self.gauge = config['gauge']
 
         if self.coarse_G:
             self.coarse_generator = CoarseGenerator(self.input_dim, self.cnum, self.use_cuda, self.device_ids)
-        self.fine_generator = FineGenerator(self.input_dim, self.cnum, self.use_cuda, self.device_ids)
+        self.fine_generator = FineGenerator(self.input_dim, self.cnum, self.gauge, self.use_cuda, self.device_ids)
 
     def forward(self, x, mask):
         x_stage1 = self.coarse_generator(x, mask) if self.coarse_G else None
@@ -89,11 +90,12 @@ class CoarseGenerator(nn.Module):
 
 
 class FineGenerator(nn.Module):
-    def __init__(self, input_dim, cnum, use_cuda=True, device_ids=None):
+    def __init__(self, input_dim, cnum, gauge=False, use_cuda=True, device_ids=None):
         super(FineGenerator, self).__init__()
         self.use_cuda = use_cuda
         self.device_ids = device_ids
-
+        self.gauge = gauge
+        
         # 3 x 256 x 256
         self.conv1 = gen_conv(input_dim + 2, cnum, 5, 1, 2)
         self.conv2_downsample = gen_conv(cnum, cnum, 3, 2, 1)

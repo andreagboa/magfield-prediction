@@ -38,7 +38,7 @@ def main():
     #To work with WandB
     if config['wandb']:
         run = wandb.init(
-            project="wgan-gp_scalar", 
+            project="wgan-bnd1", 
             entity="andreathesis",
             config=config
         )
@@ -183,7 +183,6 @@ def main():
                 if config['netG']['gauge']: losses['g'] += losses['gauge'] * config['gauge_loss_alpha']
                 losses['g'].backward()
                 trainer_module.optimizer_g.step()
-
             trainer_module.optimizer_d.step()
             trainer_module.scheduler.step()
 
