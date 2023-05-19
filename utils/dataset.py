@@ -5,8 +5,11 @@ import h5py
 
 
 class MagneticFieldDataset(torch.utils.data.Dataset):
-    def __init__(self, datapath, scaling, volume=None):
+    def __init__(self, datapath, scaling, volume=False):
         super(MagneticFieldDataset, self).__init__()
+        # Train dataset statistics
+        # Mean: [-0.00936944 -0.0011051   0.01276139]
+        # Std: [0.09885914 0.09635659 0.13698195]
         self.db_path = datapath
         self.scaling = scaling
         self.volume = volume
@@ -20,10 +23,7 @@ class MagneticFieldDataset(torch.utils.data.Dataset):
             self.open_hdf5()
     
         f = self.db['field'][idx]
-        if self.volume is not None:
-            f_t = torch.from_numpy(f.astype('float32'))
-            grad_z = torch.tensor([0])
-        elif len(f.shape) == 4:
+        if len(f.shape) == 4 and not self.volume:
             fx_z = np.gradient(f[0], axis=2)[:,:,1]
             fy_z = np.gradient(f[1], axis=2)[:,:,1]
             fz_z = np.gradient(f[2], axis=2)[:,:,1]

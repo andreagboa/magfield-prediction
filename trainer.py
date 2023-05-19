@@ -4,8 +4,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch import autograd
 
-# from model.networks import Generator, GlobalDis
-from model.networks_orig import Generator, GlobalDis
+from model.networks import Generator, GlobalDis
+from model.networks_orig import Generator_Uncond, GlobalDis_Uncond
 from utils.tools import get_model_list, calc_div, calc_curl
 from utils.logger import get_logger
 
@@ -25,14 +25,21 @@ class Trainer(nn.Module):
         self.x2_bnd = self.config['x2_bnd']
         self.uncond = self.config['uncond']
 
-        self.netG = Generator(
+        if self.uncond:
+            gen = Generator_Uncond
+            dis = GlobalDis_Uncond
+        else:
+            gen = Generator
+            dis = GlobalDis
+
+        self.netG = gen(
             self.config['netG'],
             self.config['coarse_G'],
             self.config['uncond'],
             self.use_cuda,
             self.device_ids,
         )
-        self.globalD = GlobalDis(
+        self.globalD = dis(
             self.config['netD'],
             self.config['image_shape'],
             self.config['mask_shape'],
@@ -85,7 +92,7 @@ class Trainer(nn.Module):
         global_real_pred, global_fake_pred = self.dis_forward(self.globalD, gt, x2_eval.detach())
         losses['wgan_d'] = torch.mean(global_fake_pred - global_real_pred) * self.config['global_wgan_loss_alpha']
         # gradients penalty loss
-        global_penalty = self.calc_gradient_penalty(self.globalD, gt, x2_eval.detach())
+        global_penalty = self.calc_gradient_penalty(self.globalD, gt, x2_eval.detach(), self.config['netG']['volume'])
         losses['wgan_gp'] = global_penalty
 
         # G part
@@ -121,9 +128,12 @@ class Trainer(nn.Module):
         return real_pred, fake_pred
 
     # Calculate gradient penalty
-    def calc_gradient_penalty(self, netD, real_data, fake_data):
+    def calc_gradient_penalty(self, netD, real_data, fake_data, volume=False):
         batch_size = real_data.size(0)
-        alpha = torch.rand(batch_size, 1, 1, 1)
+        if volume:
+            alpha = torch.rand(batch_size, 1, 1, 1, 1)
+        else:
+            alpha = torch.rand(batch_size, 1, 1, 1)
         alpha = alpha.expand_as(real_data)
         if self.use_cuda:
             alpha = alpha.cuda()

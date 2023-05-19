@@ -1,63 +1,108 @@
+import numpy as np
 import torch.nn as nn
 
-class Generator(nn.Module):
+class Generator_Uncond(nn.Module):
     def __init__(self, config, coarse_G, uncond, use_cuda, device_ids):
-        super(Generator, self).__init__()
+        super(Generator_Uncond, self).__init__()
         self.in_dim = config['input_dim']
         self.cnum = config['ngf']
         
         if config['volume']:
-            conv = nn.ConvTranspose2d
-            bn = nn.BatchNorm2d
+            self.img_size = [4, 4, 1]
+            self.model = nn.Sequential(            
+                    # conv(self.cnum, 256, 3, 1),
+                    nn.ConvTranspose3d(self.cnum, 256, (3, 3, 2), (1, 1, 1)),
+                    nn.ELU(inplace=True),
+                    # state size: (256, 6, 6, 2)
+                    
+                    nn.ConvTranspose3d(256, 128, (4, 4, 2), (2, 2, 1), (1, 1, 0)),
+                    nn.ELU(inplace=True),
+                    # state size: (128, 12, 12, 3)
+                    
+                    nn.ConvTranspose3d(128, 64, (4, 4, 3), (2, 2, 1), (1, 1, 1)),
+                    nn.ELU(inplace=True),
+                    # state size: (64, 24, 24, 3)
+
+                    # conv(64, 32, 4, 2, 1),
+                    nn.ConvTranspose3d(64, 32, (4, 4, 3), (2, 2, 1), (1, 1, 1)),
+                    nn.ELU(inplace=True),
+                    # state size: (32, 48, 48, 3)
+                    
+                    nn.ConvTranspose3d(32, self.in_dim, (4, 4, 3), (2, 2, 1), (1, 1, 1)),
+                    # state size: (3, 96, 96, 3)
+                )
         else:
-            conv = nn.ConvTranspose3d
-            bn = nn.BatchNorm3d
+            self.img_size = [4, 4]
+            self.model = nn.Sequential(            
+                nn.ConvTranspose2d(self.cnum, 256, 3, 1),
+                nn.ELU(inplace=True),
+                # state size: (256, 6, 6)
+                
+                nn.ConvTranspose2d(256, 128, 4, 2, 1),
+                nn.ELU(inplace=True),
+                # state size: (128, 12, 12)
+                
+                nn.ConvTranspose2d(128, 64, 4, 2, 1),
+                nn.ELU(inplace=True),
+                # state size: (64, 24, 24)
+
+                nn.ConvTranspose2d(64, 32, 4, 2, 1),
+                nn.ELU(inplace=True),
+                # state size: (32, 48, 48)
+                
+                nn.ConvTranspose2d(32, self.in_dim, 4, 2, 1),
+                # state size: (3, 96, 96)
+            )
         
         self.upsample =  nn.Sequential(
-            nn.Linear(config['latent_dim'], 16*self.cnum),            
+            nn.Linear(config['latent_dim'], np.prod(self.img_size)*self.cnum),            
             nn.LeakyReLU(0.2, inplace=True)
-        )
-
-        self.model = nn.Sequential(
-            # 4 x 4
-            conv(self.cnum, self.cnum//2, 5, 2, dilation=2, output_padding=1),
-            bn(self.cnum//2),
-            nn.PReLU(),
-            # 16 x 16
-            conv(self.cnum//2, self.cnum//4, 7, 2, dilation=2),
-            bn(self.cnum//4),
-            nn.PReLU(),
-            # 39 x 39
-            conv(self.cnum//4, self.cnum//8, 5, 2, dilation=2, output_padding=1),
-            bn(self.cnum//8),
-            nn.PReLU(),
-            # 90 x 90
-            conv(self.cnum//8, self.in_dim, 3, 1),
         )
 
     def forward(self, z, mask):
         img = self.upsample(z)
-        img = img.view(img.shape[0], self.cnum, 4, 4)
+        img = img.view(img.shape[0], self.cnum, *self.img_size)
         img = self.model(img)
         
         return None, img, None
     
 
-class GlobalDis(nn.Module):
+class GlobalDis_Uncond(nn.Module):
     def __init__(self, config, image_shape, mask_shape, bnd, use_cuda=True, device_ids=None):
-        super(GlobalDis, self).__init__()
-        self.in_dim = config['input_dim']
+        super(GlobalDis_Uncond, self).__init__()
+        self.input_dim = image_shape[0]
+        self.cnum = config['ndf']
+        self.use_cuda = use_cuda
+        self.device_ids = device_ids
 
-        # TODO 3D + conv in D
-        self.model = nn.Sequential(
-            nn.Linear(int(image_shape[0] * (mask_shape[0] + 2*bnd)**2 * config['depth']), 512),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(512, 256),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(256, 1),
-        )
+        if config['volume']:
+            self.dis_module = nn.Sequential(
+                nn.Conv3d(self.input_dim, self.cnum, (5, 5, 1), (2, 2, 1), (2, 2, 0)),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv3d(self.cnum, self.cnum*2, (5, 5, 1), (2, 2, 1), (2, 2, 0)),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv3d(self.cnum*2, self.cnum*4, (5, 5, 1), (2, 2, 1), (2, 2, 0)),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv3d(self.cnum*4, self.cnum*4, (5, 5, 3), (2, 2, 1), (2, 2, 0)),
+                nn.LeakyReLU(0.2, inplace=True),
+            )
+        else:
+            self.dis_module = nn.Sequential(
+                nn.Conv2d(self.input_dim, self.cnum, 5, 2, 2),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(self.cnum, self.cnum*2, 5, 2, 2),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(self.cnum*2, self.cnum*4, 5, 2, 2),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(self.cnum*4, self.cnum*4, 5, 2, 2),
+                nn.LeakyReLU(0.2, inplace=True),
+            )
 
-    def forward(self, img):
-        img_flat = img.view(img.shape[0], -1)
-        validity = self.model(img_flat)
-        return validity
+        self.linear = nn.Linear(self.cnum*4 * (mask_shape[0] + 2*bnd) // 16 * (mask_shape[1] + 2*bnd) // 16, 1)
+
+    def forward(self, x):
+        x = self.dis_module(x)
+        x = x.view(x.size()[0], -1)
+        x = self.linear(x)
+
+        return x

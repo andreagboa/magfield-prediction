@@ -54,7 +54,7 @@ def main():
     shutil.copy(args.config, cp_path / PurePath(args.config).name)
 
     if config['wandb'] and not config['test']:
-        run = wandb.init(
+        wandb.init(
             project="wgan-gp_scalar", 
             entity="andreathesis",
             config=config
@@ -76,7 +76,8 @@ def main():
 
         train_dataset = MagneticFieldDataset(
             datapath / config['train_data'],
-            config['scale_factor']
+            config['scale_factor'],
+            config['netG']['volume']
         )
         
         train_loader = torch.utils.data.DataLoader(
@@ -89,7 +90,8 @@ def main():
 
         val_dataset = MagneticFieldDataset(
             datapath / config['val_data'],
-            scaling=config['scale_factor']
+            config['scale_factor'],
+            config['netG']['volume']
         )
         
         val_loader = torch.utils.data.DataLoader(
@@ -193,9 +195,13 @@ def main():
                 message += speed_msg
                 logger.info(message)
                 
-                if config['wandb']: wandb.log(data=losses, step=iteration)
+                if config['wandb'] and not config['test']:
+                    wandb.log(data=losses, step=iteration)
             
             if iteration % (config['viz_iter']) == 0:
+                if config['netG']['volume']:
+                    gt = gt[:,:,:,:,1]
+                    inpainted_result = inpainted_result[:,:,:,:,1]
                 gt_scaled = gt / config['scale_factor']
                 res = inpainted_result / config['scale_factor']
                 err = abs(gt_scaled - res)
@@ -272,7 +278,8 @@ def main():
                             val_loss.append(l1_loss(x2_eval, gt))
 
                     val_err = sum(val_loss) / len(val_loss)
-                    if config['wandb']: wandb.log({"L1-loss (val)": val_err})
+                    if config['wandb'] and not config['test']:
+                        wandb.log({"L1-loss (val)": val_err})
 
                     # Saving best model
                     if val_err < best_score:
