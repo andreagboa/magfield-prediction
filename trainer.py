@@ -105,9 +105,9 @@ class Trainer(nn.Module):
                     losses['ae'] += l1_loss(x1 * (1. - mask), gt * (1. - mask)) * self.config['coarse_l1_alpha']
             
             if self.config['div_loss']: 
-                losses['div'] = calc_div(x2_eval, None)
+                losses['div'] = calc_div(x2_eval, None, self.config['netG']['volume'])
             if self.config['curl_loss']:
-                losses['curl'] = calc_curl(x2_eval, None)
+                losses['curl'] = calc_curl(x2_eval, None, self.config['netG']['volume'])
 
             if x_fixed is not None:
                 losses['gauge'] = l1_loss(x_fixed, torch.zeros_like(x_fixed))

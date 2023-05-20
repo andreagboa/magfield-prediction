@@ -145,7 +145,7 @@ def main():
             
             if config['uncond']:
                 # size_f = (config['batch_size'], gt.shape[1], (h + 2*bnd) // 4, (w + 2*bnd) // 4)
-                x = torch.normal(0, 1, size=(gt.shape[0], config['netG']['latent_dim']))
+                x = torch.normal(0, 1, size=(gt.shape[0], *config['netG']['latent_dim']))
             
             if cuda:
                 x = x.cuda()
@@ -249,7 +249,7 @@ def main():
                         bboxes = random_bbox(config, rng=rng_val)
 
                         if config['uncond']:
-                            x = torch.normal(0, 1, size=(gt.shape[0], config['netG']['latent_dim']))
+                            x = torch.normal(0, 1, size=(gt.shape[0], *config['netG']['latent_dim']))
                             mask = None
                         else:
                             x, mask, _ = mask_image(gt, bboxes, config, bnd=bnd)

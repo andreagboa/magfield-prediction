@@ -10,27 +10,44 @@ class Generator_Uncond(nn.Module):
         if config['volume']:
             self.img_size = [4, 4, 1]
             self.model = nn.Sequential(            
-                    # conv(self.cnum, 256, 3, 1),
-                    nn.ConvTranspose3d(self.cnum, 256, (3, 3, 2), (1, 1, 1)),
-                    nn.ELU(inplace=True),
-                    # state size: (256, 6, 6, 2)
-                    
-                    nn.ConvTranspose3d(256, 128, (4, 4, 2), (2, 2, 1), (1, 1, 0)),
-                    nn.ELU(inplace=True),
-                    # state size: (128, 12, 12, 3)
-                    
-                    nn.ConvTranspose3d(128, 64, (4, 4, 3), (2, 2, 1), (1, 1, 1)),
-                    nn.ELU(inplace=True),
-                    # state size: (64, 24, 24, 3)
+                # conv(self.cnum, 256, 3, 1),
+                nn.ConvTranspose3d(self.cnum, 256, (3, 3, 2), (1, 1, 1)),
+                nn.ELU(inplace=True),
+                # state size: (256, 6, 6, 2)
+                
+                nn.ConvTranspose3d(256, 128, (4, 4, 2), (2, 2, 1), (1, 1, 0)),
+                nn.ELU(inplace=True),
+                # state size: (128, 12, 12, 3)
+                
+                nn.ConvTranspose3d(128, 64, (4, 4, 3), (2, 2, 1), (1, 1, 1)),
+                nn.ELU(inplace=True),
+                # state size: (64, 24, 24, 3)
 
-                    # conv(64, 32, 4, 2, 1),
-                    nn.ConvTranspose3d(64, 32, (4, 4, 3), (2, 2, 1), (1, 1, 1)),
-                    nn.ELU(inplace=True),
-                    # state size: (32, 48, 48, 3)
-                    
-                    nn.ConvTranspose3d(32, self.in_dim, (4, 4, 3), (2, 2, 1), (1, 1, 1)),
-                    # state size: (3, 96, 96, 3)
-                )
+                # conv(64, 32, 4, 2, 1),
+                nn.ConvTranspose3d(64, 32, (4, 4, 3), (2, 2, 1), (1, 1, 1)),
+                nn.ELU(inplace=True),
+                # state size: (32, 48, 48, 3)
+                
+                nn.ConvTranspose3d(32, self.in_dim, (4, 4, 3), (2, 2, 1), (1, 1, 1)),
+                # state size: (3, 96, 96, 3)
+            )
+        elif isinstance(config['latent_dim'], list):
+            self.img_size = None
+            self.model = nn.Sequential(
+                nn.ConvTranspose2d(config['latent_dim'][0], self.cnum*4, 3, 1, 1),
+                nn.ELU(inplace=True),
+                nn.ConvTranspose2d(self.cnum*4, self.cnum*4, 3, 1, 1),
+                nn.ELU(inplace=True),
+                nn.ConvTranspose2d(self.cnum*4, self.cnum*2, 3, 1, 1),
+                nn.ELU(inplace=True),
+                nn.ConvTranspose2d(self.cnum*2, self.cnum*2, 3, 1, 1),
+                nn.ELU(inplace=True),
+                nn.ConvTranspose2d(self.cnum*2, self.cnum, 3, 1, 1),
+                nn.ELU(inplace=True),
+                nn.ConvTranspose2d(self.cnum, self.cnum//2, 3, 1, 1),
+                nn.ELU(inplace=True),
+                nn.ConvTranspose2d(self.cnum//2, self.in_dim, 3, 1, 1)
+            )
         else:
             self.img_size = [4, 4]
             self.model = nn.Sequential(            
@@ -54,14 +71,18 @@ class Generator_Uncond(nn.Module):
                 # state size: (3, 96, 96)
             )
         
-        self.upsample =  nn.Sequential(
-            nn.Linear(config['latent_dim'], np.prod(self.img_size)*self.cnum),            
-            nn.LeakyReLU(0.2, inplace=True)
-        )
+        if self.img_size is not None:
+            self.upsample =  nn.Sequential(
+                nn.Linear(config['latent_dim'][0], np.prod(self.img_size)*self.cnum),            
+                nn.LeakyReLU(0.2, inplace=True)
+            )
 
     def forward(self, z, mask):
-        img = self.upsample(z)
-        img = img.view(img.shape[0], self.cnum, *self.img_size)
+        if self.img_size is not None:
+            img = self.upsample(z)
+            img = img.view(img.shape[0], self.cnum, *self.img_size)
+        else:
+            img = z
         img = self.model(img)
         
         return None, img, None

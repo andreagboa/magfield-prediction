@@ -3,20 +3,20 @@ dataset_name: boundary_1_256
 train_data: magfield_256_large.h5
 val_data: magfield_val_256.h5
 test: False
-resume:
+resume: 140000
 batch_size: 150
 image_shape: [3, 256, 256]
 mask_shape: [94, 94]
 mask_batch_same: True
 max_delta_shape: [16,16]
 margin: [4, 4]
-div_loss: False
-curl_loss: False
+div_loss: True
+curl_loss: True
 coarse_G: False
 wandb: True
 x2_bnd: False
 uncond: True
-exp_name: 'in_94_uncond_orig_3D'
+exp_name: 'in_94_uncond_orig_3D_phys_v1'
 
 # Costum parameter for magnetic field prediction
 boundary: 1
@@ -28,17 +28,17 @@ scale_factor: 10
 
 # training parameters
 cuda: True
-gpu_ids: [1]
-num_workers: 48
+gpu_ids: [0]
+num_workers: 8
 lr: 0.0001
 beta1: 0.5
 beta2: 0.9
 n_critic: 5
-niter: 150000
+niter: 400000
 print_iter: 5000
 viz_iter: 5000
 snapshot_save_iter: 20000
-valid_iter: 200000 #2500
+valid_iter: 500000 #2500
 
 # loss weight
 coarse_l1_alpha: 1.2
@@ -47,13 +47,13 @@ ae_loss_alpha: 7.2
 global_wgan_loss_alpha: 1.
 gan_loss_alpha: 0.001
 wgan_gp_lambda: 10
-div_loss_alpha: 500
-curl_loss_alpha: 30000
+div_loss_alpha: 50
+curl_loss_alpha: 3000
 gauge_loss_alpha: 100
 
 # network parameters
 netG:
-  latent_dim: 64
+  latent_dim: [64]
   input_dim: 3
   volume: True
   ngf: 128

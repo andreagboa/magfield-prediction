@@ -369,7 +369,7 @@ def calc_div(f, grad_z=None, vol=False):
 
     if grad_z is None and vol:
         Hz_z = torch.gradient(f[:,2], dim=3)[0]
-        div_mag = torch.stack([Hx_x, Hy_y, Hz_z], dim=1)
+        div_mag = torch.stack([Hx_x, Hy_y, Hz_z], dim=1)[:,:,:,:,1]
     elif grad_z is None and not vol:
         div_mag = torch.stack([Hx_x, Hy_y], dim=1)
     else:
@@ -387,7 +387,7 @@ def calc_curl(f, grad_z=None, vol=False):
         Hy_z = torch.gradient(f[:,1], dim=3)[0]
         Hz_x = torch.gradient(f[:,2], dim=2)[0]
         Hz_y = torch.gradient(f[:,2], dim=1)[0]
-        curl_vec = torch.stack([Hz_y-Hy_z, Hx_z-Hz_x, Hy_x-Hx_y], dim=1)
+        curl_vec = torch.stack([Hz_y-Hy_z, Hx_z-Hz_x, Hy_x-Hx_y], dim=1)[:,:,:,:,1]
         curl_mag = curl_vec.square().sum(dim=1)
     elif grad_z is None and not vol:
         curl_mag = (Hy_x - Hx_y).square()
