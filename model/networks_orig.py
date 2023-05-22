@@ -1,75 +1,91 @@
 import numpy as np
+
+import torch
 import torch.nn as nn
 
 class Generator_Uncond(nn.Module):
     def __init__(self, config, coarse_G, uncond, use_cuda, device_ids):
         super(Generator_Uncond, self).__init__()
-        self.in_dim = config['input_dim']
         self.cnum = config['ngf']
-        
-        if config['volume']:
-            self.img_size = [4, 4, 1]
-            self.model = nn.Sequential(            
-                # conv(self.cnum, 256, 3, 1),
-                nn.ConvTranspose3d(self.cnum, 256, (3, 3, 2), (1, 1, 1)),
-                nn.ELU(inplace=True),
-                # state size: (256, 6, 6, 2)
-                
-                nn.ConvTranspose3d(256, 128, (4, 4, 2), (2, 2, 1), (1, 1, 0)),
-                nn.ELU(inplace=True),
-                # state size: (128, 12, 12, 3)
-                
-                nn.ConvTranspose3d(128, 64, (4, 4, 3), (2, 2, 1), (1, 1, 1)),
-                nn.ELU(inplace=True),
-                # state size: (64, 24, 24, 3)
-
-                # conv(64, 32, 4, 2, 1),
-                nn.ConvTranspose3d(64, 32, (4, 4, 3), (2, 2, 1), (1, 1, 1)),
-                nn.ELU(inplace=True),
-                # state size: (32, 48, 48, 3)
-                
-                nn.ConvTranspose3d(32, self.in_dim, (4, 4, 3), (2, 2, 1), (1, 1, 1)),
-                # state size: (3, 96, 96, 3)
-            )
-        elif isinstance(config['latent_dim'], list):
-            self.img_size = None
-            self.model = nn.Sequential(
-                nn.ConvTranspose2d(config['latent_dim'][0], self.cnum*4, 3, 1, 1),
-                nn.ELU(inplace=True),
-                nn.ConvTranspose2d(self.cnum*4, self.cnum*4, 3, 1, 1),
-                nn.ELU(inplace=True),
-                nn.ConvTranspose2d(self.cnum*4, self.cnum*2, 3, 1, 1),
-                nn.ELU(inplace=True),
-                nn.ConvTranspose2d(self.cnum*2, self.cnum*2, 3, 1, 1),
-                nn.ELU(inplace=True),
-                nn.ConvTranspose2d(self.cnum*2, self.cnum, 3, 1, 1),
-                nn.ELU(inplace=True),
-                nn.ConvTranspose2d(self.cnum, self.cnum//2, 3, 1, 1),
-                nn.ELU(inplace=True),
-                nn.ConvTranspose2d(self.cnum//2, self.in_dim, 3, 1, 1)
-            )
+        self.msp = config['scalar_potential']
+        self.gauge = config['gauge']
+        if self.msp:
+            self.in_dim = 1
         else:
-            self.img_size = [4, 4]
-            self.model = nn.Sequential(            
-                nn.ConvTranspose2d(self.cnum, 256, 3, 1),
-                nn.ELU(inplace=True),
-                # state size: (256, 6, 6)
-                
-                nn.ConvTranspose2d(256, 128, 4, 2, 1),
-                nn.ELU(inplace=True),
-                # state size: (128, 12, 12)
-                
-                nn.ConvTranspose2d(128, 64, 4, 2, 1),
-                nn.ELU(inplace=True),
-                # state size: (64, 24, 24)
-
-                nn.ConvTranspose2d(64, 32, 4, 2, 1),
-                nn.ELU(inplace=True),
-                # state size: (32, 48, 48)
-                
-                nn.ConvTranspose2d(32, self.in_dim, 4, 2, 1),
-                # state size: (3, 96, 96)
-            )
+            self.in_dim = config['input_dim']
+        
+        if len(config['latent_dim']) > 1:
+            self.img_size = None
+            if config['volume']:
+                self.model = nn.Sequential(            
+                    nn.Conv3d(config['latent_dim'][0], self.cnum, (3, 3, 3), (1, 1, 1), (1, 1, 1)),
+                    nn.ELU(inplace=True),
+                    nn.Conv3d(self.cnum, self.cnum*4, (3, 3, 3), (1, 1, 1), (1, 1, 1)),
+                    nn.ELU(inplace=True),
+                    nn.Conv3d(self.cnum*4, self.cnum*2, (3, 3, 3), (1, 1, 1), (1, 1, 1)),
+                    nn.ELU(inplace=True),
+                    nn.Conv3d(self.cnum*2, self.cnum*2, (3, 3, 3), (1, 1, 1), (1, 1, 1)),
+                    nn.ELU(inplace=True),
+                    nn.Conv3d(self.cnum*2, self.cnum, (3, 3, 3), (1, 1, 1), (1, 1, 1)),
+                    nn.ELU(inplace=True),
+                    nn.Conv3d(self.cnum, self.cnum//2, (3, 3, 3), (1, 1, 1), (1, 1, 1)),
+                    nn.ELU(inplace=True),
+                    nn.Conv3d(self.cnum//2, self.in_dim, (3, 3, 3), (1, 1, 1), (1, 1, 1)),
+                )
+            else:
+                self.model = nn.Sequential(
+                    nn.Conv2d(config['latent_dim'][0], self.cnum, 3, 1, 1),
+                    nn.ELU(inplace=True),
+                    nn.Conv2d(self.cnum, self.cnum*4, 3, 1, 1),
+                    nn.ELU(inplace=True),
+                    nn.Conv2d(self.cnum*4, self.cnum*2, 3, 1, 1),
+                    nn.ELU(inplace=True),
+                    nn.Conv2d(self.cnum*2, self.cnum*2, 3, 1, 1),
+                    nn.ELU(inplace=True),
+                    nn.Conv2d(self.cnum*2, self.cnum, 3, 1, 1),
+                    nn.ELU(inplace=True),
+                    nn.Conv2d(self.cnum, self.cnum//2, 3, 1, 1),
+                    nn.ELU(inplace=True),
+                    nn.Conv2d(self.cnum//2, self.in_dim, 3, 1, 1)
+                )
+        else:
+            if config['volume']:
+                self.img_size = [4, 4, 1]
+                self.model = nn.Sequential(            
+                    # conv(self.cnum, self.cnum*4, 3, 1),
+                    nn.ConvTranspose3d(self.cnum, self.cnum*4, (3, 3, 2), (1, 1, 1)),
+                    nn.ELU(inplace=True),
+                    # state size: (self.cnum*4, 6, 6, 2)
+                    nn.ConvTranspose3d(self.cnum*4, self.cnum*2, (4, 4, 2), (2, 2, 1), (1, 1, 0)),
+                    nn.ELU(inplace=True),
+                    # state size: (self.cnum*2, 12, 12, 3)
+                    nn.ConvTranspose3d(self.cnum*2, self.cnum, (4, 4, 3), (2, 2, 1), (1, 1, 1)),
+                    nn.ELU(inplace=True),
+                    # state size: (self.cnum, 24, 24, 3)
+                    nn.ConvTranspose3d(self.cnum, self.cnum//2, (4, 4, 3), (2, 2, 1), (1, 1, 1)),
+                    nn.ELU(inplace=True),
+                    # state size: (self.cnum//2, 48, 48, 3)
+                    nn.ConvTranspose3d(self.cnum//2, self.in_dim, (4, 4, 3), (2, 2, 1), (1, 1, 1)),
+                    # state size: (3, 96, 96, 3)
+                )
+            else:
+                self.img_size = [4, 4]
+                self.model = nn.Sequential(            
+                    nn.ConvTranspose2d(self.cnum, self.cnum*4, 3, 1),
+                    nn.ELU(inplace=True),
+                    # state size: (self.cnum*4, 6, 6)
+                    nn.ConvTranspose2d(self.cnum*4, self.cnum*2, 4, 2, 1),
+                    nn.ELU(inplace=True),
+                    # state size: (self.cnum*2, 12, 12)
+                    nn.ConvTranspose2d(self.cnum*2, self.cnum, 4, 2, 1),
+                    nn.ELU(inplace=True),
+                    # state size: (self.cnum, 24, 24)
+                    nn.ConvTranspose2d(self.cnum, self.cnum//2, 4, 2, 1),
+                    nn.ELU(inplace=True),
+                    # state size: (self.cnum//2, 48, 48)
+                    nn.ConvTranspose2d(self.cnum//2, self.in_dim, 4, 2, 1),
+                    # state size: (3, 96, 96)
+                )
         
         if self.img_size is not None:
             self.upsample =  nn.Sequential(
@@ -83,9 +99,19 @@ class Generator_Uncond(nn.Module):
             img = img.view(img.shape[0], self.cnum, *self.img_size)
         else:
             img = z
-        img = self.model(img)
+
+        field = self.model(img)
+        x_fixed = None
+        if self.msp:
+            if self.gauge:
+                x_fixed = field[:,0,0,0,1]
+
+            grad_x = (-1) * torch.gradient(field, dim=-2)[0]
+            grad_y = (-1) * torch.gradient(field, dim=-3)[0]
+            grad_z = (-1) * torch.gradient(field, dim=-1)[0]
+            field = torch.cat([grad_x, grad_y, grad_z], dim=1)
         
-        return None, img, None
+        return None, field, x_fixed
     
 
 class GlobalDis_Uncond(nn.Module):

@@ -144,7 +144,6 @@ def main():
             gt = gt[:,:,t - bnd:t + h + bnd,l - bnd:l + w + bnd]
             
             if config['uncond']:
-                # size_f = (config['batch_size'], gt.shape[1], (h + 2*bnd) // 4, (w + 2*bnd) // 4)
                 x = torch.normal(0, 1, size=(gt.shape[0], *config['netG']['latent_dim']))
             
             if cuda:
