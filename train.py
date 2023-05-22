@@ -173,8 +173,9 @@ def main():
                     losses['g'] = losses['l1'] * config['l1_loss_alpha'] \
                                 + losses['ae'] * config['ae_loss_alpha'] \
                                 + losses['wgan_g'] * config['gan_loss_alpha']
-                if config['div_loss']: losses['g'] += losses['div'] * config['div_loss_alpha']
-                if config['curl_loss']: losses['g'] += losses['curl'] * config['curl_loss_alpha']
+                if iteration > config['pi_iter']:
+                    if config['div_loss']: losses['g'] += losses['div'] * config['div_loss_alpha']
+                    if config['curl_loss']: losses['g'] += losses['curl'] * config['curl_loss_alpha']
                 if config['netG']['gauge']: losses['g'] += losses['gauge'] * config['gauge_loss_alpha']
                 losses['g'].backward()
                 trainer_module.optimizer_g.step()
