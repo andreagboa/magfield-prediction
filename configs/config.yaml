@@ -16,7 +16,7 @@ coarse_G: False
 wandb: True
 x2_bnd: False
 uncond: True
-exp_name: 'in_94_uncond_3D_img_v1'
+exp_name: 'in_94_uncond_3D_img_v2'
 
 # Costum parameter for magnetic field prediction
 boundary: 1
@@ -35,7 +35,7 @@ beta1: 0.5
 beta2: 0.9
 n_critic: 5
 niter: 300000
-pi_iter: 100000
+pi_iter: 0
 print_iter: 5000
 viz_iter: 5000
 snapshot_save_iter: 20000
@@ -46,7 +46,7 @@ coarse_l1_alpha: 1.2
 l1_loss_alpha: 3.6
 ae_loss_alpha: 7.2
 global_wgan_loss_alpha: 1.
-gan_loss_alpha: 0.001
+gan_loss_alpha: 0.005
 wgan_gp_lambda: 10
 div_loss_alpha: 50
 curl_loss_alpha: 3000
@@ -54,7 +54,7 @@ gauge_loss_alpha: 100
 
 # network parameters
 netG:
-  latent_dim: [1, 96, 96, 3]
+  latent_dim: [1, 24, 24, 3]
   input_dim: 3
   volume: True
   ngf: 32

@@ -2,6 +2,7 @@ import numpy as np
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class Generator_Uncond(nn.Module):
     def __init__(self, config, coarse_G, uncond, use_cuda, device_ids):
@@ -17,15 +18,27 @@ class Generator_Uncond(nn.Module):
         if len(config['latent_dim']) > 1:
             self.img_size = None
             if config['volume']:
-                self.model = nn.Sequential(            
-                    nn.Conv3d(config['latent_dim'][0], self.cnum, (3, 3, 3), (1, 1, 1), (1, 1, 1)),
+                self.model0 = nn.Sequential(
+                    nn.Conv3d(config['latent_dim'][0], self.cnum, (3, 3, 3), (1, 1, 1), (2, 2, 1), dilation=(2, 2, 1)),
                     nn.ELU(inplace=True),
-                    nn.Conv3d(self.cnum, self.cnum*4, (3, 3, 3), (1, 1, 1), (1, 1, 1)),
+                    nn.Conv3d(self.cnum, self.cnum*2, (3, 3, 3), (1, 1, 1), (4, 4, 1), dilation=(4, 4, 1)),
                     nn.ELU(inplace=True),
+                    nn.Conv3d(self.cnum*2, self.cnum*4, (3, 3, 3), (1, 1, 1), (8, 8, 1), dilation=(8, 8, 1)),
+                    nn.ELU(inplace=True),
+                    nn.Conv3d(self.cnum*4, self.cnum*4, (3, 3, 3), (1, 1, 1), (16, 16, 1), dilation=(16, 16, 1)),
+                    nn.ELU(inplace=True),
+                    nn.Conv3d(self.cnum*4, self.cnum*4, (3, 3, 3), (1, 1, 1), (1, 1, 1)),
+                    nn.ELU(inplace=True),
+                    nn.Conv3d(self.cnum*4, self.cnum*4, (3, 3, 3), (1, 1, 1), (1, 1, 1)),
+                    nn.ELU(inplace=True),
+                )
+                self.model1 = nn.Sequential(
                     nn.Conv3d(self.cnum*4, self.cnum*2, (3, 3, 3), (1, 1, 1), (1, 1, 1)),
                     nn.ELU(inplace=True),
                     nn.Conv3d(self.cnum*2, self.cnum*2, (3, 3, 3), (1, 1, 1), (1, 1, 1)),
                     nn.ELU(inplace=True),
+                )
+                self.model2 = nn.Sequential(
                     nn.Conv3d(self.cnum*2, self.cnum, (3, 3, 3), (1, 1, 1), (1, 1, 1)),
                     nn.ELU(inplace=True),
                     nn.Conv3d(self.cnum, self.cnum//2, (3, 3, 3), (1, 1, 1), (1, 1, 1)),
@@ -33,15 +46,19 @@ class Generator_Uncond(nn.Module):
                     nn.Conv3d(self.cnum//2, self.in_dim, (3, 3, 3), (1, 1, 1), (1, 1, 1)),
                 )
             else:
-                self.model = nn.Sequential(
+                self.model0 = nn.Sequential(
                     nn.Conv2d(config['latent_dim'][0], self.cnum, 3, 1, 1),
                     nn.ELU(inplace=True),
                     nn.Conv2d(self.cnum, self.cnum*4, 3, 1, 1),
                     nn.ELU(inplace=True),
+                )
+                self.model1 = nn.Sequential(
                     nn.Conv2d(self.cnum*4, self.cnum*2, 3, 1, 1),
                     nn.ELU(inplace=True),
                     nn.Conv2d(self.cnum*2, self.cnum*2, 3, 1, 1),
                     nn.ELU(inplace=True),
+                )
+                self.model2 = nn.Sequential(
                     nn.Conv2d(self.cnum*2, self.cnum, 3, 1, 1),
                     nn.ELU(inplace=True),
                     nn.Conv2d(self.cnum, self.cnum//2, 3, 1, 1),
@@ -97,10 +114,14 @@ class Generator_Uncond(nn.Module):
         if self.img_size is not None:
             img = self.upsample(z)
             img = img.view(img.shape[0], self.cnum, *self.img_size)
+            field = self.model(img)
         else:
-            img = z
+            img = self.model0(z)
+            img = F.interpolate(img, scale_factor=(2,2,1), mode='nearest', recompute_scale_factor=True)
+            img = self.model1(img)
+            img = F.interpolate(img, scale_factor=(2,2,1), mode='nearest', recompute_scale_factor=True)
+            field = self.model2(img)
 
-        field = self.model(img)
         x_fixed = None
         if self.msp:
             if self.gauge:
