@@ -47,6 +47,14 @@ checkpoints/boundary_1_256/in_94_perc_uniform/*
 !checkpoints/boundary_1_256/in_94_perc_uniform/config.yaml
 !checkpoints/boundary_1_256/in_94_perc_uniform/gen_00500000.pt
 
+checkpoints/boundary_1_256/in_94_perc_uniform_FAIL/*
+!checkpoints/boundary_1_256/in_94_perc_uniform_FAIL/config.yaml
+!checkpoints/boundary_1_256/in_94_perc_uniform_FAIL/gen_00500000.pt
+
+checkpoints/boundary_1_256/in_94_perc_uniform_FAIL2/*
+!checkpoints/boundary_1_256/in_94_perc_uniform_FAIL2/config.yaml
+!checkpoints/boundary_1_256/in_94_perc_uniform_FAIL2/gen_00500000.pt
+
 checkpoints/boundary_1_256/in_94_sp_gauge/*
 !checkpoints/boundary_1_256/in_94_sp_gauge/config.yaml
 !checkpoints/boundary_1_256/in_94_sp_gauge/gen_00500000.pt
