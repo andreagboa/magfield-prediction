@@ -1,9 +1,12 @@
+import warnings
+warnings.simplefilter(action="ignore", category=FutureWarning)
 import os
 import itertools
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+import h5py
 
 from pathlib import Path
 from datetime import datetime
@@ -23,9 +26,9 @@ from utils.tools import calc_div, calc_curl, random_bbox, mask_image
 from utils.tools import field_loader, get_config, get_model_list
 
 parser = ArgumentParser()
-parser.add_argument('--name', type=str, default='in_ext_div_curl_1_144_1', 
+parser.add_argument('--name', type=str, default= 'in_94_l1', #'in_ext_div_curl_1_144_1', 
     help='manual seed')
-parser.add_argument('--exp', type=str, default='paper',
+parser.add_argument('--exp', type=str, default= 'boundary_1_256', #'paper',
     help='manual seed')
 parser.add_argument('--cfg_file', type=str, default='test.yaml',
     help='Path to test configuration')
@@ -74,9 +77,18 @@ def predict(
     df_mask = pd.DataFrame([], columns=['d_h', 'd_w', 'err', 'err_pct'])
     df_eval = pd.DataFrame([], columns=['loss', 'loss_pct', 'div', 'curl'])
 
+    cfg_path=Path(__file__).parent.resolve() / 'configs' / cfg_file
+    config = get_config(cfg_path)
+    
+    magfield_path = Path(__file__).parent.resolve() / 'data' \
+            / config["val_data"] #/ f'{data_idx}.npy'
+        
+    rng_val = np.random.default_rng(2)
+    with h5py.File(magfield_path, mode='r') as db:
+        gt_all = db['field'][:num_samples*config["batch_size"]]
+
+
     for i in range(num_samples):
-        cfg_path=Path(__file__).parent.resolve() / 'configs' / cfg_file
-        config = get_config(cfg_path)
         # Setting additional configuration
         if box_amount is not None:
             config['box_amount'] = box_amount
@@ -103,11 +115,11 @@ def predict(
             data_idx = i
         else:
             data_idx = eval_idx
-        magfield_path = Path(__file__).parent.resolve() / 'data' \
-            / config["val_data"] / f'{data_idx}.npy'
 
+        gt = gt_all[i*config['batch_size']:(i+1)*config['batch_size']]
+        
         with torch.no_grad():
-            gt = field_loader(magfield_path, factor=config['scale_factor'], lab=lab)
+            # gt = field_loader(magfield_path, factor=config['scale_factor'], lab=lab)
             gt_top = None
             gt_bottom = None
             if not lab:
@@ -115,13 +127,21 @@ def predict(
                 gt_bottom = torch.from_numpy(gt[:,:,:,:,2].astype('float32'))
                 gt = torch.from_numpy(gt[:,:,:,:,1].astype('float32'))
 
-            bboxes = random_bbox(config, distributed=mask_distributed, seed=i)
-            x, mask, _ = mask_image(gt, bboxes, config)
+            bboxes = random_bbox(config, rng=rng_val)
+            x, mask, _ = mask_image(gt, bboxes, config, bnd=config['boundary'])
+
+            (t,l,h,w) = bboxes[0,0]
+            gt = gt[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
+            
+            if config['netG']['input_dim'] == 3:
+                gt_top = gt_top[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
+                gt_bottom = gt_bottom[:,:,t - config['boundary']:t + h + config['boundary'],l - config['boundary']:l + w + config['boundary']]
+
 
             # Prediction of missing field data with different methods
             if method == 'wgan':
                 # Load generator network with parameters of best trained model
-                netG = Generator(config['netG'], cuda, device_ids)
+                netG = Generator(config['netG'], config['coarse_G'], cuda, device_ids)
                 if config['resume'] is None:
                     last_model_name = get_model_list(checkpoint_path,
                                                      "gen", best=True)
@@ -139,13 +159,13 @@ def predict(
                         gt_bottom = gt_bottom.cuda()
 
                 # Inference
-                _, x2 = netG(x, mask)              
+                _, x2, _ = netG(x, mask)              
 
             elif method in ['linear', 'spline', 'gaussian']:
                 # Splitting up for each spatial location
                 x_post = np.zeros(x.shape)
-                grid_x, grid_y = np.mgrid[0:config['image_shape'][1]:1,
-                                          0:config['image_shape'][2]:1]
+                grid_x, grid_y = np.mgrid[0:config['mask_shape'][0]+2*config['boundary']:1,
+                                          0:config['mask_shape'][1]+2*config['boundary']:1]
                 if method == 'gaussian':
                     kernel = C(1.0, (1e-3, 1e3)) * RBF(10, (1e-2, 1e2))
 
@@ -170,12 +190,12 @@ def predict(
                         if config['outpaint']:
                             tck = bisplrep(
                                 points[:,0], points[:,1], values,
-                                xb=0, xe=config['image_shape'][1],
-                                yb=0, ye=config['image_shape'][2]
+                                xb=0, xe=config['mask_shape'][0]+2*config['boundary'],
+                                yb=0, ye=config['mask_shape'][1]+2*config['boundary']
                             )
                             x_post[0,l,:,:] = bisplev(
-                                np.arange(config['image_shape'][1]),
-                                np.arange(config['image_shape'][2]),
+                                np.arange(config['mask_shape'][0]+2*config['boundary']),
+                                np.arange(config['mask_shape'][1]+2*config['boundary']),
                                 tck
                             )
                         else:
@@ -188,7 +208,7 @@ def predict(
                         eval_pts_scaled = scaler.transform(eval_pts)
                         gpr = GPR(kernel=kernel, random_state=0).fit(pts_scaled, values)
                         x_post[0,l,:,:] = gpr.predict(eval_pts_scaled).reshape(
-                            config['image_shape'][1], config['image_shape'][2])
+                            config['mask_shape'][0] + 2*config['boundary'], config['mask_shape'][1] + 2*config['boundary'])
                 
                 x2 = torch.from_numpy(x_post)
 
@@ -229,8 +249,8 @@ def predict(
         if not lab:
             err = abs(gt - x2_eval)
         else:
-            err = abs(gt[:,:,:,:config['image_shape'][2]] \
-                - x2_eval[:,:,:,:config['image_shape'][2]])
+            err = abs(gt[:,:,:,:config['mask_shape'][1] + 2*config['boundary']] \
+                - x2_eval[:,:,:,:config['mask_shape'][1] + 2*config['boundary']])
         
         # Calculate errors for masks in image
         if config['outpaint']:
@@ -249,15 +269,15 @@ def predict(
                     np.mean(err[0,:,k,m] / abs(gt[0,:,k,m]))
                 ]
             ], columns=['i', 'j', 'd_h', 'd_w', 'err', 'err_pct'])
-            for k in range(config['image_shape'][1])
-            for m in range(config['image_shape'][2])
+            for k in range(config['mask_shape'][0] + 2*config['boundary'])
+            for m in range(config['mask_shape'][1] + 2*config['boundary'])
             if abs(gt[0,0,k,m]) != 0], ignore_index=True)
 
         else:
             for bbox in bboxes[0]:
                 t, l, h, w = bbox.cpu().data.numpy()
-                d_h = min(t, config['image_shape'][1] - (t + h))
-                d_w = min(l, config['image_shape'][2] - (l + w))
+                d_h = min(t, config['mask_shape'][0] + 2*config['boundary'] - (t + h))
+                d_w = min(l, config['mask_shape'][1] + 2*config['boundary'] - (l + w))
                 
                 df_mask = df_mask.append(pd.DataFrame([[
                     d_h,
@@ -276,8 +296,8 @@ def predict(
                         np.mean(err[0,:,k,m] / abs(gt[0,:,k,m]))
                     ]
                 ], columns=['i', 'j', 'd_h', 'd_w', 'err', 'err_pct'])
-                for k in range(t, t + h)
-                for m in range(l, l + w)
+                for k in range(config['mask_shape'][1] + 2*config['boundary'])
+                for m in range(config['mask_shape'][1] + 2*config['boundary'])
                 ], ignore_index=True)
 
         # Mean pixel error

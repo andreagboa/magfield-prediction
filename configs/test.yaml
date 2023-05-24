@@ -1,22 +1,28 @@
 # data parameters
-dataset_name: foo_256
-train_data: viz_256
-val_data: viz_test_ext_256
+dataset_name: boundary_1_256 #foo_256
+train_data: bnd_256/magfield_256_large.h5 #viz_256
+val_data: magfield_val_256.h5 #viz_test_ext_256
 test: False
 resume:
 batch_size: 1
 image_shape: [3, 256, 256]
-mask_shape: [96, 96]
+mask_shape: [94, 94]
 mask_batch_same: True
 max_delta_shape: [16,16]
 margin: [4, 4]
 div_loss: True
 curl_loss: True
+coarse_G: False
+wandb: True
+perc_bnd: True
+x2_bnd: False
+exp_name: 'in_94_l1_test'
 
 # Costum parameter for magnetic field prediction
+boundary: 1
 box_amount: 1
 box_patch: 4
-mode: extend
+mode: inpaint #extend
 outpaint: False
 scale_factor: 1
 
@@ -43,11 +49,14 @@ gan_loss_alpha: 0.001
 wgan_gp_lambda: 10
 div_loss_alpha: 500
 curl_loss_alpha: 30000
+gauge_loss_alpha: 1
 
 # network parameters
 netG:
   input_dim: 3
   ngf: 32
+  gauge: True
+
 
 netD:
   input_dim: 3
