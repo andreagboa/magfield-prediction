@@ -11,12 +11,12 @@ mask_batch_same: True
 max_delta_shape: [16,16]
 margin: [4, 4]
 div_loss: True
-curl_loss: True
+curl_loss: False
 coarse_G: False
 wandb: True
 x2_bnd: False
-uncond: True 
-exp_name: 'in_94_uncond'
+uncond: True
+exp_name: 'in_94_uncond_orig_msp'
 
 # Costum parameter for magnetic field prediction
 boundary: 1
@@ -34,11 +34,11 @@ lr: 0.0001
 beta1: 0.5
 beta2: 0.9
 n_critic: 5
-niter: 500000
+niter: 400000
 print_iter: 5000
 viz_iter: 5000
 snapshot_save_iter: 20000
-valid_iter: 2500
+valid_iter: 600000 #2500
 
 # loss weight
 coarse_l1_alpha: 1.2
@@ -47,17 +47,20 @@ ae_loss_alpha: 7.2
 global_wgan_loss_alpha: 1.
 gan_loss_alpha: 0.001
 wgan_gp_lambda: 10
-div_loss_alpha: 500
+div_loss_alpha: 100
 curl_loss_alpha: 30000
 gauge_loss_alpha: 100
 
 # network parameters
 netG:
+  latent_dim: 128
   input_dim: 3
-  ngf: 32
-  scalar_potential: False
-  gauge: False
+  volume: True
+  ngf: 128
+  scalar_potential: True
+  gauge: True
 
 netD:
   input_dim: 3
   ndf: 64
+  volume: True

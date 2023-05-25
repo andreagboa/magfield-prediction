@@ -11,12 +11,12 @@ mask_batch_same: True
 max_delta_shape: [16,16]
 margin: [4, 4]
 div_loss: True
-curl_loss: True
+curl_loss: False
 coarse_G: False
 wandb: True
 x2_bnd: False
 uncond: True 
-exp_name: 'in_94_uncond'
+exp_name: 'in_94_uncond_msp'
 
 # Costum parameter for magnetic field prediction
 boundary: 1
@@ -55,8 +55,8 @@ gauge_loss_alpha: 100
 netG:
   input_dim: 3
   ngf: 32
-  scalar_potential: False
-  gauge: False
+  scalar_potential: True
+  gauge: True
 
 netD:
   input_dim: 3
