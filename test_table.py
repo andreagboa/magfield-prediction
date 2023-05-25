@@ -1,3 +1,5 @@
+
+#%%
 import warnings
 warnings.simplefilter(action="ignore", category=FutureWarning)
 warnings.simplefilter(action="ignore", category=RuntimeWarning)
@@ -8,7 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import h5py
-import tabulate
+from tabulate import tabulate
 
 from pathlib import Path
 from datetime import datetime
@@ -58,7 +60,7 @@ def predict(
     name,
     exp='foo',
     cfg_file='test.yaml',
-    num_samples=100,
+    num_samples=None,
     plot=False,
     err_min=0,
     err_max=256,
@@ -633,7 +635,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     methods = ['wgan', 'linear', 'gaussian', 'spline']
-    err_str = ['MSE [mT]', 'MAPE [%]', 'Div [mT/px]', 'Curl [μT/px]']
+    err_str = ['MSE [mT]', 'PSNR [dB]','MAPE [%]', 'Div [mT/px]', 'Curl [μT/px]']
     err_mat = np.zeros([len(err_str), len(methods) + 1])
 
     for method in methods:
@@ -674,7 +676,8 @@ if __name__ == '__main__':
 err_list = err_mat.tolist()
 for i, err_n in enumerate(err_str):
     err_list[i][0] = err_n
-print(tabulate(err_list, headers=['%']+(methods), tablefmt="grid", showindex=False))
+print(tabulate(err_list, headers=['Method']+(methods), tablefmt="grid", showindex=False))
 
 
         
+# %%
