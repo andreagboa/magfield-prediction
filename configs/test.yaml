@@ -1,9 +1,9 @@
 # data parameters
-dataset_name: boundary_1_256 #foo_256
-train_data: bnd_256/magfield_256_large.h5 #viz_256
-val_data: magfield_val_256.h5 #viz_test_ext_256
+dataset_name: boundary_1_256
+train_data: bnd_256/magfield_256_large.h5
+val_data: magfield_val_256.h5
 test: False
-resume:
+resume: 600000
 batch_size: 1
 image_shape: [3, 256, 256]
 mask_shape: [94, 94]
@@ -16,7 +16,7 @@ coarse_G: False
 wandb: True
 perc_bnd: True
 x2_bnd: False
-exp_name: 'in_94_l1_test'
+exp_name: 'in_94_l1'
 
 # Costum parameter for magnetic field prediction
 boundary: 1
