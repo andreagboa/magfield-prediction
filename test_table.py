@@ -634,31 +634,34 @@ def plot_eval(
 if __name__ == '__main__':
     args = parser.parse_args()
 
-    methods = ['wgan', 'linear', 'gaussian', 'spline']
-    err_str = ['MSE [mT]', 'PSNR [dB]','MAPE [%]', 'Div [mT/px]', 'Curl [μT/px]']
+    methods = ['linear', 'gaussian', 'spline', 'biharmonic', 'wgan']
+    err_str = ['MAE [mT]', 'MSE [mT]', 'PSNR [dB]','MAPE [%]', 'Div [mT/px]', 'Curl [μT/px]']
     err_mat = np.zeros([len(err_str), len(methods) + 1])
+    num_samples = 100
 
     for method in methods:
+        
+        print('Starting '+method)
+        mse_mat = np.zeros([num_samples])
+        psnr_mat = np.zeros([num_samples])
+        mape_mat = np.zeros([num_samples])
+        div_mat = np.zeros([num_samples])
+        curl_mat = np.zeros([num_samples])
 
-        mse_mat = np.zeros([args.num_samples])
-        psnr_mat = np.zeros([args.num_samples])
-        mape_mat = np.zeros([args.num_samples])
-        div_mat = np.zeros([args.num_samples])
-        curl_mat = np.zeros([args.num_samples])
-
-        for j in range(args.num_samples):
+        for j in range(num_samples):
+            print('Iteration: '+str(j))
             gt, mae, pct, div, curl = predict(
                 exp=args.exp,
                 name=args.name,
                 cfg_file=args.cfg_file,
-                num_samples=args.num_samples,
+                num_samples=num_samples,
                 box_amount=args.box_amount,
                 mask_size=args.mask_size,
                 method=method,
                 lab=args.lab,
                 plot=args.plot,
                 err_scale=args.err_scale,
-                save=args.save,
+                save=True,
             )
 
             
@@ -668,7 +671,9 @@ if __name__ == '__main__':
             div_mat[j] = div
             curl_mat[j] = curl
 
-        err_mat[:,methods.index(method) + 1] = [np.mean(mse_mat)*1e3, np.mean(psnr_mat), np.mean(mape_mat), 
+        print('Done with '+method)
+
+        err_mat[:,methods.index(method) + 1] = [np.mean(mse_mat**2)*1e3, np.mean(mse_mat)*1e3, np.mean(psnr_mat), np.mean(mape_mat), 
                                           np.mean(div_mat)*1e3, np.mean(curl_mat)*1e6]
     
 
