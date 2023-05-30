@@ -28,6 +28,7 @@ file = h5py.File('data/magfield_val_256.h5')
 # err_mat = np.empty([5,5])
 err_str = ['MSE [mT]', 'PSNR [dB]', 'MAPE [%]', 'Div [mT/px]', 'Curl [μT/px]']
 err_mat = np.zeros([len(err_str), len(models) + 1])
+
 # %%
 for model in models:
     exp_path = Path(path_orig, model)
@@ -55,7 +56,7 @@ for model in models:
 
         # Test last generator ran
         last_model_name = Path(exp_path, f'gen_00{str(it_number)}.pt')
-        netG = Generator(config['netG'], config['coarse_G'], True, [0])
+        netG = Generator(config['netG'], config['coarse_G'], True, config['gpu_ids'])
         netG.load_state_dict(torch.load(last_model_name))
         netG = nn.parallel.DataParallel(netG, device_ids=[0])
         corrupt_t = torch.from_numpy(x[0].astype('float32')).cuda().unsqueeze(0)
