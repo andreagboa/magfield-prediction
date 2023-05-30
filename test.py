@@ -23,12 +23,12 @@ import torch.backends.cudnn as cudnn
 
 from model.networks import Generator
 from utils.tools import calc_div, calc_curl, random_bbox, mask_image
-from utils.tools import field_loader, get_config, get_model_list
+from utils.tools import get_config, get_model_list
 
 parser = ArgumentParser()
-parser.add_argument('--name', type=str, default= 'in_94_l1', #'in_ext_div_curl_1_144_1', 
+parser.add_argument('--name', type=str, default= 'in_94_l1',
     help='manual seed')
-parser.add_argument('--exp', type=str, default= 'boundary_1_256', #'paper',
+parser.add_argument('--exp', type=str, default= 'boundary_1_256',
     help='manual seed')
 parser.add_argument('--cfg_file', type=str, default='test.yaml',
     help='Path to test configuration')
@@ -42,8 +42,6 @@ parser.add_argument('--err_scale', type=float, default=None,
     help='Scale of error colorbar')
 parser.add_argument('--method', type=str, default='wgan',
     help='Method to use for predicting missing values')
-parser.add_argument('--lab', type=bool, default=False,
-    help='Use lab setup')
 parser.add_argument('--plot', type=bool, default=True,
     help='Plot results')
 parser.add_argument('--save', type=bool, default=False,
@@ -56,14 +54,10 @@ def predict(
     cfg_file='test.yaml',
     num_samples=100,
     plot=False,
-    err_min=0,
-    err_max=256,
     err_scale=0.01,
     plot_scale=0.05,
     box_amount=None,
     mask_size=None,
-    mask_distributed=False,
-    lab=False,
     eval_idx=None,
     seed=0,
     method='wgan',
@@ -74,21 +68,24 @@ def predict(
     if not output_path.exists(): output_path.mkdir()
 
     df_px = pd.DataFrame([], columns=['i', 'j', 'd_h', 'd_w', 'err', 'err_pct'])
-    df_mask = pd.DataFrame([], columns=['d_h', 'd_w', 'err', 'err_pct'])
     df_eval = pd.DataFrame([], columns=['loss', 'loss_pct', 'div', 'curl'])
 
     cfg_path=Path(__file__).parent.resolve() / 'configs' / cfg_file
     config = get_config(cfg_path)
     
-    magfield_path = Path(__file__).parent.resolve() / 'data' \
-            / config["val_data"] #/ f'{data_idx}.npy'
+    magfield_path = Path(__file__).parent.resolve() / 'data' / config["val_data"]
+    bnd_img_shape = config['mask_shape'][0] + 2 * config['boundary']
         
     rng_val = np.random.default_rng(2)
     with h5py.File(magfield_path, mode='r') as db:
-        gt_all = db['field'][:num_samples*config["batch_size"]]
+        gt_all = db['field'][:num_samples*config["batch_size"]] * config['scale_factor']
 
 
     for i in range(num_samples):
+        # Magnetic field paths and index control for sample
+        data_idx = i if eval_idx is None else eval_idx
+        gt = gt_all[data_idx*config['batch_size']:(data_idx+1)*config['batch_size']]
+
         # Setting additional configuration
         if box_amount is not None:
             config['box_amount'] = box_amount
@@ -107,22 +104,11 @@ def predict(
         # Setting seeds for reproducability
         torch.manual_seed(seed)
         if cuda: torch.cuda.manual_seed_all(seed)
-
-        # Magnetic field paths and index control for sample
-        if lab:
-            data_idx = 0
-        elif eval_idx is None:
-            data_idx = i
-        else:
-            data_idx = eval_idx
-
-        gt = gt_all[i*config['batch_size']:(i+1)*config['batch_size']]
         
         with torch.no_grad():
-            # gt = field_loader(magfield_path, factor=config['scale_factor'], lab=lab)
             gt_top = None
             gt_bottom = None
-            if not lab:
+            if config['netG']['input_dim'] == 3:
                 gt_top = torch.from_numpy(gt[:,:,:,:,0].astype('float32'))
                 gt_bottom = torch.from_numpy(gt[:,:,:,:,2].astype('float32'))
                 gt = torch.from_numpy(gt[:,:,:,:,1].astype('float32'))
@@ -143,11 +129,9 @@ def predict(
                 # Load generator network with parameters of best trained model
                 netG = Generator(config['netG'], config['coarse_G'], cuda, device_ids)
                 if config['resume'] is None:
-                    last_model_name = get_model_list(checkpoint_path,
-                                                     "gen", best=True)
+                    last_model_name = get_model_list(checkpoint_path, "gen", best=True)
                 else:
-                    last_model_name = get_model_list(checkpoint_path, "gen",
-                                                     iteration=config['resume'])
+                    last_model_name = get_model_list(checkpoint_path, "gen", iteration=config['resume'])
                 netG.load_state_dict(torch.load(last_model_name))
 
                 if cuda:
@@ -164,8 +148,7 @@ def predict(
             elif method in ['linear', 'spline', 'gaussian']:
                 # Splitting up for each spatial location
                 x_post = np.zeros(x.shape)
-                grid_x, grid_y = np.mgrid[0:config['mask_shape'][0]+2*config['boundary']:1,
-                                          0:config['mask_shape'][1]+2*config['boundary']:1]
+                grid_x, grid_y = np.mgrid[0:bnd_img_shape:1, 0:bnd_img_shape:1]
                 if method == 'gaussian':
                     kernel = C(1.0, (1e-3, 1e3)) * RBF(10, (1e-2, 1e2))
 
@@ -183,32 +166,29 @@ def predict(
                         ), axis=-1).reshape((-1,2))
 
                     if method == 'linear':
-                        x_post[0,l,:,:] = griddata(points, values, (grid_x, grid_y),
-                                                   method='linear')
+                        x_post[0,l,:,:] = griddata(points, values, (grid_x, grid_y), method='linear')
 
                     elif method == 'spline':
                         if config['outpaint']:
                             tck = bisplrep(
                                 points[:,0], points[:,1], values,
-                                xb=0, xe=config['mask_shape'][0]+2*config['boundary'],
-                                yb=0, ye=config['mask_shape'][1]+2*config['boundary']
+                                xb=0, xe=bnd_img_shape,
+                                yb=0, ye=bnd_img_shape
                             )
                             x_post[0,l,:,:] = bisplev(
-                                np.arange(config['mask_shape'][0]+2*config['boundary']),
-                                np.arange(config['mask_shape'][1]+2*config['boundary']),
+                                np.arange(bnd_img_shape),
+                                np.arange(bnd_img_shape),
                                 tck
                             )
                         else:
-                            x_post[0,l,:,:] = griddata(points, values, (grid_x, grid_y),
-                                                       method='cubic')
+                            x_post[0,l,:,:] = griddata(points, values, (grid_x, grid_y), method='cubic')
 
                     elif method == 'gaussian':
                         scaler = preprocessing.StandardScaler().fit(points)
                         pts_scaled = scaler.transform(points)
                         eval_pts_scaled = scaler.transform(eval_pts)
                         gpr = GPR(kernel=kernel, random_state=0).fit(pts_scaled, values)
-                        x_post[0,l,:,:] = gpr.predict(eval_pts_scaled).reshape(
-                            config['mask_shape'][0] + 2*config['boundary'], config['mask_shape'][1] + 2*config['boundary'])
+                        x_post[0,l,:,:] = gpr.predict(eval_pts_scaled).reshape(bnd_img_shape, bnd_img_shape)
                 
                 x2 = torch.from_numpy(x_post)
 
@@ -229,28 +209,15 @@ def predict(
             else:
                 x2_eval = x2 * mask + x * (1. - mask)
 
-            if not lab:
-                field = torch.cat([
-                    gt_top.unsqueeze(-1),
-                    x2_eval.unsqueeze(-1),
-                    gt_bottom.unsqueeze(-1)
-                ], dim=-1)
-            else:
-                field = x2_eval
+            field = torch.stack([gt_top, x2_eval, gt_bottom], dim=-1)
             
-            div = calc_div(field, lab).cpu().data.numpy()
-            curl = calc_curl(field, lab).cpu().data.numpy()
+            div = calc_div(field, False).cpu().data.numpy()
+            curl = calc_curl(field, False).cpu().data.numpy()
         
         gt = gt.cpu().data.numpy() / config['scale_factor']
         x2_eval = x2_eval.cpu().data.numpy() / config['scale_factor']
         masked_image = x.cpu().data.numpy() / config['scale_factor']
-
-        # For lab setup only a smaller area is measured
-        if not lab:
-            err = abs(gt - x2_eval)
-        else:
-            err = abs(gt[:,:,:,:config['mask_shape'][1] + 2*config['boundary']] \
-                - x2_eval[:,:,:,:config['mask_shape'][1] + 2*config['boundary']])
+        err = abs(gt - x2_eval)
         
         # Calculate errors for masks in image
         if config['outpaint']:
@@ -269,46 +236,36 @@ def predict(
                     np.mean(err[0,:,k,m] / abs(gt[0,:,k,m]))
                 ]
             ], columns=['i', 'j', 'd_h', 'd_w', 'err', 'err_pct'])
-            for k in range(config['mask_shape'][0] + 2*config['boundary'])
-            for m in range(config['mask_shape'][1] + 2*config['boundary'])
+            for k in range(bnd_img_shape)
+            for m in range(bnd_img_shape)
             if abs(gt[0,0,k,m]) != 0], ignore_index=True)
 
         else:
             for bbox in bboxes[0]:
                 t, l, h, w = bbox.cpu().data.numpy()
-                d_h = min(t, config['mask_shape'][0] + 2*config['boundary'] - (t + h))
-                d_w = min(l, config['mask_shape'][1] + 2*config['boundary'] - (l + w))
-                
-                df_mask = df_mask.append(pd.DataFrame([[
-                    d_h,
-                    d_w,
-                    err[0,:,t:t+h,l:l+w].mean(),
-                    np.mean(err[0,:,t:t+h,l:l+w] / abs(gt[0,:,t:t+h,l:l+w]))
-                ]], columns=['d_h', 'd_w', 'err', 'err_pct']), ignore_index=True)
-
                 df_px = df_px.append([pd.DataFrame([
                     [
                         k,
                         m,
-                        min(abs(t - k), abs(t + h - k)),
-                        min(abs(l - m), abs(l + w - m)),
+                        min(abs(k), abs(bnd_img_shape - k)),
+                        min(abs(m), abs(bnd_img_shape - m)),
                         np.mean(err[0,:,k,m]),
                         np.mean(err[0,:,k,m] / abs(gt[0,:,k,m]))
                     ]
                 ], columns=['i', 'j', 'd_h', 'd_w', 'err', 'err_pct'])
-                for k in range(config['mask_shape'][1] + 2*config['boundary'])
-                for m in range(config['mask_shape'][1] + 2*config['boundary'])
+                for k in range(bnd_img_shape)
+                for m in range(bnd_img_shape)
                 ], ignore_index=True)
 
         # Mean pixel error
-        part_err = err[0,:,err_min:err_max,err_min:err_max]
+        part_err = err[0,:,:,:]
         if np.count_nonzero(part_err) == 0:
             loss = 0
         else:
             loss = np.sum(part_err) / np.count_nonzero(part_err)
 
         # Pixel-wise percentage error 
-        pct = part_err / abs(gt[0,:,err_min:err_max,err_min:err_max])
+        pct = part_err / abs(gt[0,:,:,:])
         print(
             'Mean:', np.mean(pct[np.where(pct!=0)].flatten()),
             'Std:', np.std(pct[np.where(pct!=0)].flatten()) ,
@@ -376,9 +333,6 @@ def predict(
             + '_' + timestamp + '_' + method
         df_eval.to_pickle(f'{output_path}/{fname}.p')
         df_px.to_pickle(f'{output_path}/{fname}_px.p')
-
-        if not config['outpaint']:
-            df_mask.to_pickle(f'{output_path}/{fname}_mask.p')
 
 
 def eval_test(name, timestamp, exp='foo'):
@@ -632,8 +586,9 @@ if __name__ == '__main__':
         box_amount=args.box_amount,
         mask_size=args.mask_size,
         method=args.method,
-        lab=args.lab,
         plot=args.plot,
         err_scale=args.err_scale,
         save=args.save,
     )
+
+# %%
