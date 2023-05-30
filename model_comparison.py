@@ -19,11 +19,12 @@ rng = np.random.default_rng(0)
 path_orig = Path(__file__).parent.resolve() / 'checkpoints' / 'boundary_1_256'
 
 # models = ['in_94_coarseG_l1', 'in_94_coarseG_l1False', 'in_94_l1', 'in_94_lightweight']
-models = ['in_94_scalar_pot']
+models = ['in_94_sp_old']
 # model = 'in_div_curl_1_94_1' #does not work with this script
 file = h5py.File('data/magfield_symm_val_256.h5')
 # Maybe use the validation fields
 # file = h5py.File('data/magfield_val_256.h5')
+iter = 500000
 
 # Empty matrix so append errors (4 models, 5 performance tests: mse, psnr, mape, divergence, curl)
 # err_mat = np.empty([5,5])
@@ -55,8 +56,9 @@ for model in models:
         # sample_check(x[0], v_max=plt_scale, filename = 'boundary_'+model)
 
         # Test last generator ran
-        last_model_name = Path(exp_path, 'gen_00400000.pt')
-        netG = Generator(config['netG'], config['coarse_G'], True, [0])
+        last_model_name = Path(exp_path, 'gen_'+str(iter)+'.pt')
+        # netG = Generator(config['netG'], config['coarse_G'], True, [0])
+        netG = Generator(config['netG'], config['coarse_G'], uncond = True, use_cuda = True, device_ids = config['gpu_ids'])
         netG.load_state_dict(torch.load(last_model_name))
         netG = nn.parallel.DataParallel(netG, device_ids=[0])
         corrupt_t = torch.from_numpy(x[0].astype('float32')).cuda().unsqueeze(0)
