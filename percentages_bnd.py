@@ -17,10 +17,9 @@ plt_scale = 0.1
 rng = np.random.default_rng(0)
 path_orig = Path(__file__).parent.resolve() / 'checkpoints' / 'boundary_1_256'
 
-# models = ['in_94_coarseG_l1', 'in_94_coarseG_l1False', 'in_94_l1', 'in_94_lightweight']
 percentages = [10,25,50,75,100]
-# model = 'in_94_l1'
-model = 'in_96_l1_perc'
+# model = 'in_94_l1_perc'
+model = 'in_94_perc_uniform_05'
 # file = h5py.File('data/bnd_256/magfield_256_large.h5')
 # Maybe use the validation fields
 it_number = 500000
@@ -67,7 +66,7 @@ for perc in percentages:
         mask_t = torch.from_numpy(mask[0].astype('float32')).cuda().unsqueeze(0)
 
         # Inference
-        _, out = netG(corrupt_t, mask_t)
+        _, out, x_fine = netG(corrupt_t, mask_t)
 
         # Plot original box (input)
         # sample_check(orig[0], v_max=plt_scale, filename = 'orig_box_'+model)

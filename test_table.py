@@ -94,7 +94,13 @@ def predict(
     with h5py.File(magfield_path, mode='r') as db:
         gt_all = db['field'][:num_samples*config["batch_size"]]
 
-
+    mae_mat = np.zeros([num_samples])
+    mse_mat = np.zeros([num_samples])
+    psnr_mat = np.zeros([num_samples])
+    mape_mat = np.zeros([num_samples])
+    div_mat = np.zeros([num_samples])
+    curl_mat = np.zeros([num_samples])
+    
     for i in range(num_samples):
         # Setting additional configuration
         if box_amount is not None:
@@ -372,8 +378,15 @@ def predict(
             figname = f'{config["box_amount"]}_{config["mask_shape"][0]}_{i}_{method}'
             plt.savefig(f'{figpath}/{figname}.png')
             # plt.savefig(f'{figpath}/{figname}.svg')
+        
+        mae_mat[j] = loss
+        mse_mat[j] = loss**2
+        psnr_mat[j] = 20 * np.log10(np.max(np.abs(gt)) / np.sqrt(mse_mat[j]))
+        mape_mat[j] = loss_pct*100
+        div_mat[j] = div
+        curl_mat[j] = curl
 
-    if save:
+    if num_samples % 10 == 0 and save==True:
         df_eval.attrs['name'] = name
         df_eval.attrs['box_amount'] = config['box_amount']
         df_eval.attrs['mask_shape'] = config['mask_shape'][0]
@@ -386,8 +399,10 @@ def predict(
 
         if not config['outpaint']:
             df_mask.to_pickle(f'{output_path}/{fname}_mask.p')
+        
     
-    return gt, loss, loss_pct, div, curl 
+
+    return mae_mat, mse_mat, psnr_mat, mape_mat, div_mat, curl_mat
 
 def eval_test(name, timestamp, exp='foo'):
     output_path = Path(__file__).parent.resolve() \
@@ -642,38 +657,24 @@ if __name__ == '__main__':
     for method in methods:
         
         print('Starting '+method)
-        mse_mat = np.zeros([num_samples])
-        psnr_mat = np.zeros([num_samples])
-        mape_mat = np.zeros([num_samples])
-        div_mat = np.zeros([num_samples])
-        curl_mat = np.zeros([num_samples])
 
-        for j in range(num_samples):
-            print('Iteration: '+str(j))
-            gt, mae, pct, div, curl = predict(
-                exp=args.exp,
-                name=args.name,
-                cfg_file=args.cfg_file,
-                num_samples=num_samples,
-                box_amount=args.box_amount,
-                mask_size=args.mask_size,
-                method=method,
-                lab=args.lab,
-                plot=args.plot,
-                err_scale=args.err_scale,
-                save=True,
-            )
-
-            
-            mse_mat[j] = mae
-            psnr_mat[j] = 20 * np.log10(np.max(np.abs(gt)) / np.sqrt(mse_mat[j]))
-            mape_mat[j] = pct
-            div_mat[j] = div
-            curl_mat[j] = curl
+        mae_mat, mse_mat, psnr_mat, mape_mat, div_mat, curl_mat = predict(
+            exp=args.exp,
+            name=args.name,
+            cfg_file=args.cfg_file,
+            num_samples=num_samples,
+            box_amount=args.box_amount,
+            mask_size=args.mask_size,
+            method=method,
+            lab=args.lab,
+            plot=args.plot,
+            err_scale=args.err_scale,
+            save=True,
+        )
 
         print('Done with '+method)
 
-        err_mat[:,methods.index(method) + 1] = [np.mean(mse_mat**2)*1e3, np.mean(mse_mat)*1e3, np.mean(psnr_mat), np.mean(mape_mat), 
+        err_mat[:,methods.index(method) + 1] = [np.mean(mae_mat)*1e3, np.mean(mse_mat)*1e3, np.mean(psnr_mat), np.mean(mape_mat)*100, 
                                           np.mean(div_mat)*1e3, np.mean(curl_mat)*1e6]
     
 

@@ -48,11 +48,13 @@ gan_loss_alpha: 0.001
 wgan_gp_lambda: 10
 div_loss_alpha: 500
 curl_loss_alpha: 30000
+gauge_loss_alpha: 1
 
 # network parameters
 netG:
   input_dim: 3
   ngf: 32
+  gauge: False
 
 netD:
   input_dim: 3

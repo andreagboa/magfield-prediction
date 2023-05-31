@@ -20,7 +20,8 @@ path_orig = Path(__file__).parent.resolve() / 'checkpoints' / 'boundary_1_256'
 models = ['in_94_coarseG_l1', 'in_94_coarseG_l1False', 'in_94_l1', 'in_94_lightweight']
 # file = h5py.File('data/bnd_256/magfield_256_large.h5')
 # Maybe use the validation fields
-it_number = 600000
+# models = ['in_94_perc_uniform_05']
+it_number = 500000
 
 file = h5py.File('data/magfield_val_256.h5')
 
@@ -32,7 +33,8 @@ err_mat = np.zeros([len(err_str), len(models) + 1])
 # %%
 for model in models:
     exp_path = Path(path_orig, model)
-
+    print(exp_path)
+    
     # Matrices for storing errors for the samples
     mse_mat = np.zeros([img_idx])
     psnr_mat = np.zeros([img_idx])
