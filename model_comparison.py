@@ -19,7 +19,7 @@ rng = np.random.default_rng(0)
 path_orig = Path(__file__).parent.resolve() / 'checkpoints' / 'boundary_1_256'
 
 # models = ['in_94_coarseG_l1', 'in_94_coarseG_l1False', 'in_94_l1', 'in_94_lightweight']
-models = ['in_94_sp_old']
+models = ['in_94_sp_old','in_94_sp_gauge']
 # model = 'in_div_curl_1_94_1' #does not work with this script
 file = h5py.File('data/magfield_symm_val_256.h5')
 # Maybe use the validation fields
@@ -56,7 +56,7 @@ for model in models:
         # sample_check(x[0], v_max=plt_scale, filename = 'boundary_'+model)
 
         # Test last generator ran
-        last_model_name = Path(exp_path, 'gen_'+str(iter)+'.pt')
+        last_model_name = Path(exp_path, 'gen_00'+str(iter)+'.pt')
         # netG = Generator(config['netG'], config['coarse_G'], True, [0])
         netG = Generator(config['netG'], config['coarse_G'], uncond = True, use_cuda = True, device_ids = config['gpu_ids'])
         netG.load_state_dict(torch.load(last_model_name))
