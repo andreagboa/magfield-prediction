@@ -20,8 +20,8 @@ path_orig = Path(__file__).parent.resolve() / 'checkpoints' / 'boundary_1_256'
 models = ['in_94_coarseG_l1', 'in_94_coarseG_l1False', 'in_94_l1', 'in_94_lightweight']
 # file = h5py.File('data/bnd_256/magfield_256_large.h5')
 # Maybe use the validation fields
-# models = ['in_94_perc_uniform_05']
-it_number = 500000
+# models = ['in_94_l1']
+it_number = 600000
 
 file = h5py.File('data/magfield_val_256.h5')
 
@@ -65,7 +65,7 @@ for model in models:
         mask_t = torch.from_numpy(mask[0].astype('float32')).cuda().unsqueeze(0)
 
         # Inference
-        _, out = netG(corrupt_t, mask_t)
+        _, out, x_fixed = netG(corrupt_t, mask_t)
 
         # Plot original box (input)
         # sample_check(orig[0], v_max=plt_scale, filename = 'orig_box_'+model)
