@@ -33,7 +33,7 @@ err_mat = np.zeros([len(err_str), len(models) + 1])
 # %%
 for model in models:
     exp_path = Path(path_orig, model)
-
+    
     # Matrices for storing errors for the samples
     mse_mat = np.zeros([img_idx])
     psnr_mat = np.zeros([img_idx])
@@ -56,7 +56,10 @@ for model in models:
         # sample_check(x[0], v_max=plt_scale, filename = 'boundary_'+model)
 
         # Test last generator ran
-        last_model_name = Path(exp_path, 'gen_00'+str(iter)+'.pt')
+        if model=='in_94_sp_gauge':
+            last_model_name = Path(exp_path, 'gen_00480000.pt')
+        else:
+            last_model_name = Path(exp_path, 'gen_00'+str(iter)+'.pt')
         # netG = Generator(config['netG'], config['coarse_G'], True, [0])
         netG = Generator(config['netG'], config['coarse_G'], uncond = True, use_cuda = True, device_ids = config['gpu_ids'])
         netG.load_state_dict(torch.load(last_model_name))

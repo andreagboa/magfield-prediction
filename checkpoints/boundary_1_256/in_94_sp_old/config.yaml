@@ -15,7 +15,7 @@ curl_loss: True
 msp_loss: False
 coarse_G: False
 wandb: True
-x2_bnd: True
+x2_bnd: False
 exp_name: 'in_94_sp'
 
 # Costum parameter for magnetic field prediction
@@ -56,7 +56,7 @@ netG:
   input_dim: 2
   ngf: 32
   scalar_potential: True
-  gauge: True
+  gauge: False
 
 netD:
   input_dim: 2
