@@ -59,6 +59,10 @@ checkpoints/boundary_1_256/in_94_sp_gauge/*
 !checkpoints/boundary_1_256/in_94_sp_gauge/config.yaml
 !checkpoints/boundary_1_256/in_94_sp_gauge/gen_00500000.pt
 
+checkpoints/boundary_1_256/in_94_sp_wrong/*
+!checkpoints/boundary_1_256/in_94_sp_wrong/config.yaml
+!checkpoints/boundary_1_256/in_94_sp_wrong/gen_00500000.pt
+
 checkpoints/paper/*/test
 data/*
 # !data/bnd_256
