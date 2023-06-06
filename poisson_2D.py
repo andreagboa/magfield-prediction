@@ -220,7 +220,6 @@ def solve_poisson_msp(field, bnd_dirichlet=False, plot=False):
         # my_contourf(x, y, np.sqrt(vx**2 + vy**2), r'$|-\nabla u\,(x,y)|$','afmhot')
         # py.streamplot(x, y, vx, vy, color='w', density=1.2, linewidth=0.4)
     
-    sample_check(rec_field, v_max=plt_scale)
 
     return u, rec_field
 
