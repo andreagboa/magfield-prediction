@@ -138,7 +138,7 @@ def predict(
                         gt_top = gt_top.cuda()
                         gt_bottom = gt_bottom.cuda()
 
-                # Inference
+                # Inference - add timer
                 _, x2 = netG(x, mask)              
 
             elif method in ['linear', 'spline', 'gaussian']:
@@ -162,7 +162,7 @@ def predict(
                             np.expand_dims(grid_y, axis=-1)
                         ), axis=-1).reshape((-1,2))
 
-                    if method == 'linear':
+                    if method == 'linear': #timer
                         x_post[0,l,:,:] = griddata(points, values, (grid_x, grid_y),
                                                    method='linear')
 
@@ -178,7 +178,7 @@ def predict(
                                 np.arange(config['image_shape'][2]),
                                 tck
                             )
-                        else:
+                        else: #timer
                             x_post[0,l,:,:] = griddata(points, values, (grid_x, grid_y),
                                                        method='cubic')
 
@@ -187,6 +187,7 @@ def predict(
                         pts_scaled = scaler.transform(points)
                         eval_pts_scaled = scaler.transform(eval_pts)
                         gpr = GPR(kernel=kernel, random_state=0).fit(pts_scaled, values)
+                        #timer
                         x_post[0,l,:,:] = gpr.predict(eval_pts_scaled).reshape(
                             config['image_shape'][1], config['image_shape'][2])
                 
