@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import h5py
 from tabulate import tabulate
+import time
 
 from pathlib import Path
 from datetime import datetime
@@ -36,7 +37,7 @@ parser.add_argument('--exp', type=str, default= 'boundary_1_256', #'paper',
     help='manual seed')
 parser.add_argument('--cfg_file', type=str, default='test.yaml',
     help='Path to test configuration')
-parser.add_argument('--num_samples', type=int, default=5,
+parser.add_argument('--num_samples', type=int, default=1,
     help='Number of samples to predict')
 parser.add_argument('--box_amount', type=int, default=None,
     help='Number of bounding boxes as mask')
@@ -86,7 +87,9 @@ def predict(
 
     cfg_path=Path(__file__).parent.resolve() / 'configs' / cfg_file
     config = get_config(cfg_path)
-    
+    print('Boundary: '+str(config['boundary']))
+
+
     magfield_path = Path(__file__).parent.resolve() / 'data' \
             / config["val_data"] #/ f'{data_idx}.npy'
         
@@ -172,7 +175,12 @@ def predict(
                         gt_bottom = gt_bottom.cuda()
 
                 # Inference
-                _, x2, _ = netG(x, mask)              
+                start_time = time.time()
+                _, x2, _ = netG(x, mask)     
+                elapsed_time = time.time() - start_time
+                print(f"The WGAN-GP method took {elapsed_time} seconds to execute.")
+
+                         
 
             elif method in ['linear', 'spline', 'gaussian']:
                 # Splitting up for each spatial location
@@ -196,8 +204,12 @@ def predict(
                         ), axis=-1).reshape((-1,2))
 
                     if method == 'linear':
+                        start_time = time.time()
                         x_post[0,l,:,:] = griddata(points, values, (grid_x, grid_y),
                                                    method='linear')
+                        elapsed_time = time.time() - start_time
+                        print(f"The Linear interpolation took {elapsed_time} seconds to execute.")
+
 
                     elif method == 'spline':
                         if config['outpaint']:
@@ -212,16 +224,23 @@ def predict(
                                 tck
                             )
                         else:
+                            start_time = time.time()
                             x_post[0,l,:,:] = griddata(points, values, (grid_x, grid_y),
                                                        method='cubic')
+                            elapsed_time = time.time() - start_time
+                            print(f"The Spline interpolation took {elapsed_time} seconds to execute.")
 
+                            
                     elif method == 'gaussian':
                         scaler = preprocessing.StandardScaler().fit(points)
                         pts_scaled = scaler.transform(points)
                         eval_pts_scaled = scaler.transform(eval_pts)
                         gpr = GPR(kernel=kernel, random_state=0).fit(pts_scaled, values)
+                        start_time = time.time()
                         x_post[0,l,:,:] = gpr.predict(eval_pts_scaled).reshape(
                             config['mask_shape'][0] + 2*config['boundary'], config['mask_shape'][1] + 2*config['boundary'])
+                        elapsed_time = time.time() - start_time
+                        print(f"The interpolation with Gaussian processes took {elapsed_time} seconds to execute.")
                 
                 x2 = torch.from_numpy(x_post)
 
@@ -379,12 +398,12 @@ def predict(
             plt.savefig(f'{figpath}/{figname}.png')
             # plt.savefig(f'{figpath}/{figname}.svg')
         
-        mae_mat[j] = loss
-        mse_mat[j] = loss**2
-        psnr_mat[j] = 20 * np.log10(np.max(np.abs(gt)) / np.sqrt(mse_mat[j]))
-        mape_mat[j] = loss_pct*100
-        div_mat[j] = div
-        curl_mat[j] = curl
+        mae_mat[i] = loss
+        mse_mat[i] = loss**2
+        psnr_mat[i] = 20 * np.log10(np.max(np.abs(gt)) / np.sqrt(mse_mat[i]))
+        mape_mat[i] = loss_pct*100
+        div_mat[i] = div
+        curl_mat[i] = curl
 
     if num_samples % 10 == 0 and save==True:
         df_eval.attrs['name'] = name
@@ -649,10 +668,11 @@ def plot_eval(
 if __name__ == '__main__':
     args = parser.parse_args()
 
-    methods = ['linear', 'gaussian', 'spline', 'biharmonic', 'wgan']
+    # methods = ['linear', 'gaussian', 'spline', 'biharmonic', 'wgan']
+    methods = ['spline']
     err_str = ['MAE [mT]', 'MSE [mT]', 'PSNR [dB]','MAPE [%]', 'Div [mT/px]', 'Curl [μT/px]']
     err_mat = np.zeros([len(err_str), len(methods) + 1])
-    num_samples = 100
+    num_samples = 1
 
     for method in methods:
         

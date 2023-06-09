@@ -55,7 +55,7 @@ gauge_loss_alpha: 1
 netG:
   input_dim: 3
   ngf: 32
-  gauge: True
+  gauge: False
 
 netD:
   input_dim: 3
