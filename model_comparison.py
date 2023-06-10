@@ -3,6 +3,9 @@
 import numpy as np
 from pathlib import Path
 from tabulate import tabulate
+import time
+from datetime import datetime 
+import pandas as pd
 
 import torch
 import torch.nn as nn
@@ -17,16 +20,17 @@ plt_scale = 0.1
 rng = np.random.default_rng(0)
 path_orig = Path(__file__).parent.resolve() / 'checkpoints' / 'boundary_1_256'
 
-models = ['in_94_coarseG_l1', 'in_94_coarseG_l1False', 'in_94_l1', 'in_94_lightweight']
-# file = h5py.File('data/bnd_256/magfield_256_large.h5')
+# models = ['in_94_coarseG_l1', 'in_94_coarseG_l1False', 'in_94_l1', 'in_94_lightweight']
+models = ['in_94_2D']
+file = h5py.File('data/bnd_256/magfield_256_large.h5')
 # Maybe use the validation fields
-it_number = 600000
+it_number = 500000
 
-file = h5py.File('data/magfield_val_256.h5')
+file = h5py.File('data/magfield_symm_val_256.h5')
 
 # Empty matrix so append errors (4 models, 5 performance tests: mse, psnr, mape, divergence, curl)
 # err_mat = np.empty([5,5])
-err_str = ['MSE [mT]', 'PSNR [dB]', 'MAPE [%]', 'Div [mT/px]', 'Curl [μT/px]']
+err_str = ['MSE [mT]', 'PSNR [dB]', 'MAPE [%]', 'Div [mT/px]', 'Curl [μT/px]', 'Inference [s]']
 err_mat = np.zeros([len(err_str), len(models) + 1])
 # %%
 for model in models:
@@ -38,10 +42,13 @@ for model in models:
     mape_mat = np.zeros([img_idx])
     div_mat = np.zeros([img_idx])
     curl_mat = np.zeros([img_idx])
+    inference = []
+    df_eval = pd.DataFrame([])
+
 
     for j in range(img_idx):
         # print(file['field'][img_idx,:,:,:,1].shape)
-        field = file['field'][j,:,:,:,1]
+        field = file['field'][j,:,:,:]
         # Plot field chosen
         # sample_check(field, v_max=plt_scale, filename = 'orig_'+ model)
         
@@ -62,7 +69,11 @@ for model in models:
         mask_t = torch.from_numpy(mask[0].astype('float32')).cuda().unsqueeze(0)
 
         # Inference
+        start_time = time.time()
         _, out = netG(corrupt_t, mask_t)
+        elapsed_time = time.time() - start_time
+        # print(f'Model {model} took {elapsed_time} seconds to run.')
+        inference.append(elapsed_time)
 
         # Plot original box (input)
         # sample_check(orig[0], v_max=plt_scale, filename = 'orig_box_'+model)
@@ -118,7 +129,26 @@ for model in models:
         # print(f"curl: {curl:.5f}")
     
     err_mat[:,models.index(model) + 1] = [np.mean(mse_mat)*1e3, np.mean(psnr_mat), np.mean(mape_mat), 
-                                          np.mean(div_mat)*1e3, np.mean(curl_mat)*1e6]
+                                          np.mean(div_mat)*1e3, np.mean(curl_mat)*1e6, np.mean(inference)]
+
+    df_eval = df_eval.append(pd.DataFrame([
+            [
+                (mse_mat)*1e3, 
+                (mape_mat), 
+                (div_mat)*1e3, 
+                (curl_mat)*1e6,
+                inference
+            ]
+        ], columns=['MSE', 'MAPE', 'div', 'curl', 'inference']), ignore_index=True)
+    
+
+    # df_eval.attrs['perc'] = perc
+    # df_eval.attrs['box_amount'] = config['box_amount']
+    # df_eval.attrs['mask_shape'] = config['mask_shape'][0]
+    timestamp = datetime.now().strftime("%y%m%d_%H%M%S")
+    
+    fname = model+ '_' + timestamp 
+    df_eval.to_pickle(f'{path_orig}/{fname}.p')
 
 #%%
 err_list = err_mat.tolist()
