@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils import spectral_norm as spectral_norm_fn
 from torch.nn.utils import weight_norm as weight_norm_fn
-from kornia.filters import spatial_gradient
+# from kornia.filters import spatial_gradient
 
 
 class Generator(nn.Module):
