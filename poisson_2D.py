@@ -13,15 +13,15 @@ from magtense.utils import plot_magfield
 from utils.create_data import sample_check
 
 def curl(field):
-    field = np.swapaxes(field,1,2)
-    Fx_y = np.gradient(field[0], axis=1)
-    Fy_x = np.gradient(field[1], axis=0)
+    # field = np.swapaxes(field,1,2)
+    Fx_y = np.gradient(field[0], axis=0)
+    Fy_x = np.gradient(field[1], axis=1)
 
     if field.shape[0]== 3:
         Fx_z = np.gradient(field[0], axis=2)
         Fy_z = np.gradient(field[1], axis=2)
-        Fz_x = np.gradient(field[2], axis=0)
-        Fz_y = np.gradient(field[2], axis=1)
+        Fz_x = np.gradient(field[2], axis=1)
+        Fz_y = np.gradient(field[2], axis=0)
         
         curl_vec = np.stack([Fz_y-Fy_z, Fx_z-Fz_x, Fy_x-Fx_y], axis=0)[:,:,:,1]
     else:
@@ -31,9 +31,9 @@ def curl(field):
 
 
 def div(field):
-    field = np.swapaxes(field,1,2)
-    Fx_x = np.gradient(field[0], axis=0)
-    Fy_y = np.gradient(field[1], axis=1)
+    # field = np.swapaxes(field,1,2)
+    Fx_x = np.gradient(field[0], axis=1)
+    Fy_y = np.gradient(field[1], axis=0)
 
     if field.shape[0]== 3:
         Fz_z = np.gradient(field[2], axis=2)
@@ -43,19 +43,6 @@ def div(field):
         div = np.stack([Fx_x, Fy_y], axis=0)
     
     return div.sum(axis=0), div
-
-
-def grad(scalar_field):
-    F_x = np.gradient(scalar_field, axis=0)
-    F_y = np.gradient(scalar_field, axis=1)
-
-    if len(scalar_field.shape) == 3:
-        F_z = np.gradient(scalar_field, axis=2)
-        grad = np.stack([F_x, F_y, F_z], axis=0)
-    else:                    
-        grad = np.stack([F_x, F_y], axis=0)
-    
-    return np.swapaxes(grad,1,2)
 
 
 def my_contourf(x, y, f, ttl, clrmp='inferno'):
@@ -122,7 +109,10 @@ def diff_mat_2D(Nx, Ny):
 def solve_poisson_msp(field, bnd_dirichlet=False, plot=False):
     _, Nx, Ny = field.shape
     div_field, _ = div((-1) * field)
-    source = div_field.flatten()
+    # source = div_field.flatten()
+    source = np.zeros(shape=(Ny, Nx)).ravel()
+
+    sample_check(field, v_max=0.1)
 
     x = np.linspace(0, 1, Nx)
     y = np.linspace(0, 1, Ny)
@@ -139,29 +129,29 @@ def solve_poisson_msp(field, bnd_dirichlet=False, plot=False):
     bnd_type = []
 
     # Finding outer boundary regions
-    ind_L = np.squeeze(np.where(Xu==x[0]))[1:]
+    ind_L = np.squeeze(np.where(Xu==x[0]))
     ind_R = np.squeeze(np.where(Xu==x[-1]))
-    ind_B = np.squeeze(np.where(Yu==y[0]))[1:]
+    ind_B = np.squeeze(np.where(Yu==y[0]))
     ind_T = np.squeeze(np.where(Yu==y[-1]))
 
     # x-/y-direction of magnetic field are interchanged
-    neg_Hx = np.swapaxes((-1) * field,1,2)[0]
-    neg_Hy = np.swapaxes((-1) * field,1,2)[1]
+    Hx = field[0].ravel()
+    Hy = field[1].ravel()
 
     bnd_ind.append(ind_L)
-    bnd_val.append(-neg_Hx[0,1:])
+    bnd_val.append((-1) * Hx[ind_L])
     bnd_type.append(1)
 
     bnd_ind.append(ind_R)
-    bnd_val.append(neg_Hx[-1,:])
+    bnd_val.append((-1) * Hx[ind_R])
     bnd_type.append(1)
 
-    bnd_ind.append(ind_T)
-    bnd_val.append(neg_Hy[:,-1])
+    bnd_ind.append(ind_B)
+    bnd_val.append((-1) * Hy[ind_B])
     bnd_type.append(2)
 
-    bnd_ind.append(ind_B)
-    bnd_val.append(-neg_Hy[1:,0])
+    bnd_ind.append(ind_T)
+    bnd_val.append((-1) * Hy[ind_T])
     bnd_type.append(2)
     
     if bnd_dirichlet:
@@ -174,13 +164,13 @@ def solve_poisson_msp(field, bnd_dirichlet=False, plot=False):
             '#f032e6', '#fabed4', '#469990', '#dcbeff', '#9A6324', '#fffac8', '#800000',
             '#aaffc3', '#000075', '#a9a9a9', '#ffffff', '#000000']
         py.close('all')
-        py.figure(figsize=(9,7))
+        py.figure(figsize=(5,4))
         my_scatter(X, Y, clr_set[0], msize=4)
 
         for m in range(len(bnd_val)):
             my_scatter(Xu[bnd_ind[m]], Yu[bnd_ind[m]], clr_set[len(bnd_val)-m], msize=4)
 
-        py.figure(figsize=(9,7))
+        py.figure(figsize=(5,4))
         my_contourf(x,y, source.reshape(Ny,Nx), r'$f\,(x,y)$', 'RdBu')
 
     Dx_2d, Dy_2d, D2x_2d, D2y_2d = diff_mat_2D(Nx, Ny)
@@ -208,23 +198,29 @@ def solve_poisson_msp(field, bnd_dirichlet=False, plot=False):
     rec_field = np.stack([vx, vy], axis=0)
 
     if plot:
-        py.figure(figsize = (12,7))
+        py.figure(figsize = (5,4))
         my_contourf(x, y, u, r'$u\,(x,y)$')
 
-        py.figure(figsize = (12,7))
+        py.figure(figsize = (5,4))
         my_contourf(x, y, vx, r'$|-\nabla u\,(x,y)|$', 'bwr')
-        py.figure(figsize = (12,7))
+        py.figure(figsize = (5,4))
         my_contourf(x, y, vy, r'$|-\nabla u\,(x,y)|$', 'bwr')
         # my_contourf(x, y, np.sqrt(vx**2 + vy**2), r'$|-\nabla u\,(x,y)|$','afmhot')
         # py.streamplot(x, y, vx, vy, color='w', density=1.2, linewidth=0.4)
+    
 
     return u, rec_field
 
 #%%
+plt_scale = 0.1
 
 if __name__ == "__main__":
     db = h5py.File('C:/Users/s174370/magfield-prediction/data/magfield_symm_256.h5', mode='r')
-    field = db['field'][0]
+    field = db['field'][0,:,:,:]
     msp, rec_field = solve_poisson_msp(field, plot=True)
+    # sample_check(field, v_max=plt_scale)#, filename = 'orig_'+model)
+    sample_check(rec_field, v_max=plt_scale)#, filename = 'orig_'+model)
+    # sample_check(msp, v_max=plt_scale)#, filename = 'orig_'+model)
+
     db.close()
 # %%
