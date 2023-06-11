@@ -21,10 +21,10 @@ rng = np.random.default_rng(0)
 path_orig = Path(__file__).parent.resolve() / 'checkpoints' / 'boundary_1_256'
 
 # models = ['in_94_coarseG_l1', 'in_94_coarseG_l1False', 'in_94_l1', 'in_94_lightweight']
-models = ['in_94_SP']
+models = ['in_94_scalar_pot']
 file = h5py.File('data/bnd_256/magfield_256_large.h5')
 # Maybe use the validation fields
-it_number = 500000
+it_number = 480000
 
 file = h5py.File('data/magfield_symm_val_256.h5')
 
