@@ -247,7 +247,7 @@ def sample_check(field, v_max=1, filename=f'foo_{datetime.utcnow().strftime("%y%
     plotpath = Path(__file__).parent.resolve() / '..' / 'plots' / 'sample_check'
     if not plotpath.exists(): plotpath.mkdir(parents=True)
     plt.clf()
-    labels = ['Bx-field', 'By-field', 'Bz-field']
+    labels = [r'$B_x$-field', r'$B_y$-field', r'$B_z$-field']
     nrows = 3 if cube else 1
     fig, axes = plt.subplots(nrows=nrows, ncols=3, sharex=True, sharey=True, figsize=(15,5))
     fig.suptitle(filename)
@@ -271,6 +271,9 @@ def sample_check(field, v_max=1, filename=f'foo_{datetime.utcnow().strftime("%y%
     cbar_ax = fig.add_axes([0.825, 0.345, 0.015, 0.3])
     fig.colorbar(im, cax=cbar_ax)
     plt.savefig(f'{plotpath}/{filename}.png', bbox_inches='tight')
+    # plt.savefig(f'{plotpath}/{filename}.pdf', bbox_inches='tight')
+
+
 
 
 def create_db(size, name='', res=256, num_proc=None, check=False, ext=False,

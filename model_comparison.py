@@ -17,12 +17,13 @@ from utils.tools import random_bbox, mask_image, get_config
 from model.networks import Generator
 
 # Parameters
-img_idx = 1
+img_idx = 100
 plt_scale = 0.1
 rng = np.random.default_rng(0)
 path_orig = Path(__file__).parent.resolve() / 'checkpoints' / 'boundary_1_256'
 
 models = ['in_94_coarseG_l1', 'in_94_coarseG_l1False', 'in_94_l1', 'in_94_lightweight']
+# models = ['in_94_lightweight']
 # file = h5py.File('data/bnd_256/magfield_256_large.h5')
 # Maybe use the validation fields
 # models = ['in_94_l1']
@@ -38,7 +39,7 @@ err_mat = np.zeros([len(err_str), len(models) + 1])
 # %%
 for model in models:
     exp_path = Path(path_orig, model)
-    print(exp_path)
+    print(model)
     
     # Matrices for storing errors for the samples
     mse_mat = np.zeros([img_idx])
@@ -74,7 +75,7 @@ for model in models:
         start_time = time.time()
         _, out, x_fixed = netG(corrupt_t, mask_t)
         elapsed_time = time.time() - start_time
-        print(f'Model {model} took {elapsed_time} seconds to run.')
+        # print(f'Model {model} took {elapsed_time} seconds to run.')
         inference.append(elapsed_time)
 
         # Plot original box (input)
@@ -149,8 +150,8 @@ for model in models:
     # df_eval.attrs['mask_shape'] = config['mask_shape'][0]
     timestamp = datetime.now().strftime("%y%m%d_%H%M%S")
     
-    fname = model+ '_' + timestamp 
-    # df_eval.to_pickle(f'{path_orig}/{fname}.p')
+    fname = model+ '_' + timestamp + '_' + str(img_idx)
+    df_eval.to_pickle(f'{path_orig}/{fname}.p')
 
 #%%
 err_list = err_mat.tolist()

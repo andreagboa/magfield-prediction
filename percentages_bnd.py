@@ -21,11 +21,11 @@ rng = np.random.default_rng(0)
 path_orig = Path(__file__).parent.resolve() / 'checkpoints' / 'boundary_1_256'
 
 percentages = [10,25,50,75,100]
-model = 'in_94_l1'
-# model = 'in_94_perc_uniform_05'
+# model = 'in_94_l1'
+model = 'in_94_perc_uniform_05'
 # file = h5py.File('data/bnd_256/magfield_256_large.h5')
 # Maybe use the validation fields
-it_number = 600000
+it_number = 500000
 
 file = h5py.File('data/magfield_val_256.h5')
 

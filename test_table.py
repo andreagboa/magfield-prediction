@@ -103,7 +103,8 @@ def predict(
     mape_mat = np.zeros([num_samples])
     div_mat = np.zeros([num_samples])
     curl_mat = np.zeros([num_samples])
-    
+    inference = []
+
     for i in range(num_samples):
         # Setting additional configuration
         if box_amount is not None:
@@ -178,7 +179,8 @@ def predict(
                 start_time = time.time()
                 _, x2, _ = netG(x, mask)     
                 elapsed_time = time.time() - start_time
-                print(f"The WGAN-GP method took {elapsed_time} seconds to execute.")
+                inference.append(elapsed_time)
+                # print(f"The WGAN-GP method took {elapsed_time} seconds to execute.")
 
                          
 
@@ -208,7 +210,8 @@ def predict(
                         x_post[0,l,:,:] = griddata(points, values, (grid_x, grid_y),
                                                    method='linear')
                         elapsed_time = time.time() - start_time
-                        print(f"The Linear interpolation took {elapsed_time} seconds to execute.")
+                        # print(f"The Linear interpolation took {elapsed_time} seconds to execute.")
+                        inference.append(elapsed_time)
 
 
                     elif method == 'spline':
@@ -228,7 +231,8 @@ def predict(
                             x_post[0,l,:,:] = griddata(points, values, (grid_x, grid_y),
                                                        method='cubic')
                             elapsed_time = time.time() - start_time
-                            print(f"The Spline interpolation took {elapsed_time} seconds to execute.")
+                            # print(f"The Spline interpolation took {elapsed_time} seconds to execute.")
+                            inference.append(elapsed_time)
 
                             
                     elif method == 'gaussian':
@@ -240,8 +244,9 @@ def predict(
                         x_post[0,l,:,:] = gpr.predict(eval_pts_scaled).reshape(
                             config['mask_shape'][0] + 2*config['boundary'], config['mask_shape'][1] + 2*config['boundary'])
                         elapsed_time = time.time() - start_time
-                        print(f"The interpolation with Gaussian processes took {elapsed_time} seconds to execute.")
-                
+                        # print(f"The interpolation with Gaussian processes took {elapsed_time} seconds to execute.")
+                        inference.append(elapsed_time)
+
                 x2 = torch.from_numpy(x_post)
 
             elif method == 'biharmonic':
@@ -421,7 +426,7 @@ def predict(
         
     
 
-    return mae_mat, mse_mat, psnr_mat, mape_mat, div_mat, curl_mat
+    return mae_mat, mse_mat, psnr_mat, mape_mat, div_mat, curl_mat, inference
 
 def eval_test(name, timestamp, exp='foo'):
     output_path = Path(__file__).parent.resolve() \
@@ -669,16 +674,16 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # methods = ['linear', 'gaussian', 'spline', 'biharmonic', 'wgan']
-    methods = ['spline']
-    err_str = ['MAE [mT]', 'MSE [mT]', 'PSNR [dB]','MAPE [%]', 'Div [mT/px]', 'Curl [μT/px]']
+    methods = ['gaussian']
+    err_str = ['MAE [mT]', 'MSE [mT]', 'PSNR [dB]','MAPE [%]', 'Div [mT/px]', 'Curl [μT/px]', 'Inference [s]']
     err_mat = np.zeros([len(err_str), len(methods) + 1])
-    num_samples = 1
+    num_samples = 100
 
     for method in methods:
         
         print('Starting '+method)
 
-        mae_mat, mse_mat, psnr_mat, mape_mat, div_mat, curl_mat = predict(
+        mae_mat, mse_mat, psnr_mat, mape_mat, div_mat, curl_mat, inference = predict(
             exp=args.exp,
             name=args.name,
             cfg_file=args.cfg_file,
@@ -692,10 +697,12 @@ if __name__ == '__main__':
             save=True,
         )
 
+
+        print('Inference time averaged for: '+ method + str(np.mean(inference[1:])))
         print('Done with '+method)
 
         err_mat[:,methods.index(method) + 1] = [np.mean(mae_mat)*1e3, np.mean(mse_mat)*1e3, np.mean(psnr_mat), np.mean(mape_mat)*100, 
-                                          np.mean(div_mat)*1e3, np.mean(curl_mat)*1e6]
+                                          np.mean(div_mat)*1e3, np.mean(curl_mat)*1e6, np.mean(inference[1:])]
     
 
 #%%
