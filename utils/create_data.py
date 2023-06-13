@@ -258,6 +258,8 @@ def sample_check(field, v_max=1, filename=f'foo_{datetime.utcnow().strftime("%y%
                 ax = axes.flat[i * 3 + j]
                 im = ax.imshow(comp, cmap='bwr',
                     norm=colors.Normalize(vmin=-v_max, vmax=v_max), origin="lower")
+                ax.tick_params(axis='x', labelsize=15) 
+                ax.tick_params(axis='y', labelsize=15)
                 ax.set_title(labels[j] + f'@{z+1}')
 
     else:
@@ -265,6 +267,8 @@ def sample_check(field, v_max=1, filename=f'foo_{datetime.utcnow().strftime("%y%
             ax = axes.flat[i]
             im = ax.imshow(comp, cmap='bwr',
                 norm=colors.Normalize(vmin=-v_max, vmax=v_max), origin="lower")
+            ax.tick_params(axis='x', labelsize=15) 
+            ax.tick_params(axis='y', labelsize=15)
             ax.set_title(labels[i])
     
     fig.subplots_adjust(right=0.8)

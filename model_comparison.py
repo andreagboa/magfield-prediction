@@ -23,16 +23,11 @@ rng = np.random.default_rng(0)
 path_orig = Path(__file__).parent.resolve() / 'checkpoints' / 'boundary_1_256'
 
 models = ['in_94_coarseG_l1', 'in_94_coarseG_l1False', 'in_94_l1', 'in_94_lightweight']
-# models = ['in_94_lightweight']
-# file = h5py.File('data/bnd_256/magfield_256_large.h5')
-# Maybe use the validation fields
-# models = ['in_94_l1']
 it_number = 600000
 
 file = h5py.File('data/magfield_val_256.h5')
 
 # Empty matrix so append errors (4 models, 5 performance tests: mse, psnr, mape, divergence, curl)
-# err_mat = np.empty([5,5])
 err_str = ['MSE [mT]', 'PSNR [dB]', 'MAPE [%]', 'Div [mT/px]', 'Curl [μT/px]', 'Inference']
 err_mat = np.zeros([len(err_str), len(models) + 1])
 
@@ -75,28 +70,13 @@ for model in models:
         start_time = time.time()
         _, out, x_fixed = netG(corrupt_t, mask_t)
         elapsed_time = time.time() - start_time
-        # print(f'Model {model} took {elapsed_time} seconds to run.')
         inference.append(elapsed_time)
 
-        # Plot original box (input)
-        # sample_check(orig[0], v_max=plt_scale, filename = 'orig_box_'+model)
-
         out_np = out.squeeze(0).cpu().data.numpy()
-        # Plot output
-        # sample_check(out_np, v_max=plt_scale, filename='wgan_'+model)
-
         # Calculate performance of models
         diff = np.abs(orig - out_np)
-        # mse_final = np.mean(diff**2)
-        mse_mat[j] = np.mean(diff**2)
-        # mse_mat[j] = np.mean(diff) #For MAE instead of MSE
-        # if mse_mat[j] < 1e-4:
-        #     psnr_mat[j] = 0
-        # else:
-            # psnr = 20 * np.log10(np.max(orig) / np.sqrt(mse_final))
-        
+        mse_mat[j] = np.mean(diff**2) 
         psnr_mat[j] = 20 * np.log10(np.max(np.abs(orig)) / np.sqrt(mse_mat[j]))
-        # mape = 100*(np.abs(np.mean(diff)/np.mean(orig)))
         mape_mat[j] = 100 * (np.mean(diff) / np.mean(np.abs(orig)))
 
         # print(f"Recon loss: {np.mean(np.abs(diff)):.4f}")

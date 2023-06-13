@@ -84,6 +84,7 @@ def predict(
     df_px = pd.DataFrame([], columns=['i', 'j', 'd_h', 'd_w', 'err', 'err_pct'])
     df_mask = pd.DataFrame([], columns=['d_h', 'd_w', 'err', 'err_pct'])
     df_eval = pd.DataFrame([], columns=['loss', 'loss_pct', 'div', 'curl'])
+    df_eval2 = pd.DataFrame([], columns=['MAE', 'MAPE', 'div', 'curl'])
 
     cfg_path=Path(__file__).parent.resolve() / 'configs' / cfg_file
     config = get_config(cfg_path)
@@ -93,7 +94,7 @@ def predict(
     magfield_path = Path(__file__).parent.resolve() / 'data' \
             / config["val_data"] #/ f'{data_idx}.npy'
         
-    rng_val = np.random.default_rng(2)
+    rng_val = np.random.default_rng(0)
     with h5py.File(magfield_path, mode='r') as db:
         gt_all = db['field'][:num_samples*config["batch_size"]]
 
@@ -363,6 +364,15 @@ def predict(
             ]
         ], columns=['loss', 'loss_pct', 'div', 'curl']), ignore_index=True)
 
+        df_eval2 = df_eval2.append(pd.DataFrame([
+            [
+                err,
+                100 * (np.mean(err) / np.mean(np.abs(err))),
+                div,
+                curl
+            ]
+        ], columns=['MAE', 'MAPE', 'div', 'curl']), ignore_index=True)
+
         if plot:
             figpath = output_path / 'figs'
             if not figpath.exists(): figpath.mkdir()
@@ -419,6 +429,7 @@ def predict(
         fname = str(config["box_amount"]) + '_' + str(config["mask_shape"][0]) \
             + '_' + timestamp + '_' + method
         df_eval.to_pickle(f'{output_path}/{fname}.p')
+        df_eval2.to_pickle(f'{output_path}/{fname}_2.p')
         df_px.to_pickle(f'{output_path}/{fname}_px.p')
 
         if not config['outpaint']:
@@ -673,8 +684,8 @@ def plot_eval(
 if __name__ == '__main__':
     args = parser.parse_args()
 
-    # methods = ['linear', 'gaussian', 'spline', 'biharmonic', 'wgan']
-    methods = ['gaussian']
+    methods = ['linear', 'spline', 'wgan']
+    # methods = ['wgan']
     err_str = ['MAE [mT]', 'MSE [mT]', 'PSNR [dB]','MAPE [%]', 'Div [mT/px]', 'Curl [μT/px]', 'Inference [s]']
     err_mat = np.zeros([len(err_str), len(methods) + 1])
     num_samples = 100
@@ -698,7 +709,7 @@ if __name__ == '__main__':
         )
 
 
-        print('Inference time averaged for: '+ method + str(np.mean(inference[1:])))
+        # print('Inference time averaged for: '+ method + str(np.mean(inference[1:])))
         print('Done with '+method)
 
         err_mat[:,methods.index(method) + 1] = [np.mean(mae_mat)*1e3, np.mean(mse_mat)*1e3, np.mean(psnr_mat), np.mean(mape_mat)*100, 
