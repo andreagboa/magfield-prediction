@@ -28,6 +28,11 @@ class Trainer(nn.Module):
             self.use_cuda,
             self.device_ids
         )
+        trainable_params = sum(
+	        p.numel() for p in self.netG.parameters() if p.requires_grad)
+        print('Checking parameters G:')
+        print(trainable_params)
+
         self.globalD = GlobalDis(
             self.config['netD'],
             self.config['image_shape'],
@@ -36,7 +41,11 @@ class Trainer(nn.Module):
             self.use_cuda,
             self.device_ids
         )
-
+        trainable_params = sum(
+	        p.numel() for p in self.globalD.parameters() if p.requires_grad)
+        print('Checking parameters D:')
+        print(trainable_params)
+        
         self.optimizer_g = torch.optim.Adam(
             self.netG.parameters(),
             lr=self.config['lr'],

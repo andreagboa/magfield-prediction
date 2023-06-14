@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import h5py
+import time
 
 from pathlib import Path
 from datetime import datetime
@@ -188,7 +189,12 @@ def predict(
                         pts_scaled = scaler.transform(points)
                         eval_pts_scaled = scaler.transform(eval_pts)
                         gpr = GPR(kernel=kernel, random_state=0).fit(pts_scaled, values)
+                        start_time = time.time()
                         x_post[0,l,:,:] = gpr.predict(eval_pts_scaled).reshape(bnd_img_shape, bnd_img_shape)
+                        elapsed_time = time.time() - start_time
+                        inference = elapsed_time
+                    
+                
                 
                 x2 = torch.from_numpy(x_post)
 
@@ -266,11 +272,11 @@ def predict(
 
         # Pixel-wise percentage error 
         pct = part_err / abs(gt[0,:,:,:])
-        print(
-            'Mean:', np.mean(pct[np.where(pct!=0)].flatten()),
-            'Std:', np.std(pct[np.where(pct!=0)].flatten()) ,
-            'Median:', np.median(pct[np.where(pct!=0)].flatten())
-        )
+        # print(
+        #     'Mean:', np.mean(pct[np.where(pct!=0)].flatten()),
+        #     'Std:', np.std(pct[np.where(pct!=0)].flatten()) ,
+        #     'Median:', np.median(pct[np.where(pct!=0)].flatten())
+        # )
         loss_pct = np.median(pct[np.where(pct!=0)].flatten())
 
         # Storing losses in DataFrame
@@ -279,9 +285,10 @@ def predict(
                 loss,
                 loss_pct,
                 div,
-                curl
+                curl,
+                inference
             ]
-        ], columns=['loss', 'loss_pct', 'div', 'curl']), ignore_index=True)
+        ], columns=['loss', 'loss_pct', 'div', 'curl', 'inference']), ignore_index=True)
 
         if plot:
             figpath = output_path / 'figs'
@@ -331,7 +338,7 @@ def predict(
         
         fname = str(config["box_amount"]) + '_' + str(config["mask_shape"][0]) \
             + '_' + timestamp + '_' + method
-        df_eval.to_pickle(f'{output_path}/{fname}.p')
+        df_eval.to_pickle(f'{output_path}/{fname}_THIS_ONE.p')
         df_px.to_pickle(f'{output_path}/{fname}_px.p')
 
 

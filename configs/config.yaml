@@ -13,10 +13,10 @@ margin: [4, 4]
 div_loss: True
 curl_loss: True
 coarse_G: False
-wandb: True
-perc_bnd: True
+wandb: False
+perc_bnd: False
 x2_bnd: False
-exp_name: 'in_94_perc_uniform'
+exp_name: 'in_94_CHECKING'
 
 # Costum parameter for magnetic field prediction
 boundary: 1

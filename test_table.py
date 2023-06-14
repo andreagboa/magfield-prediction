@@ -176,7 +176,7 @@ def predict(
                         gt_top = gt_top.cuda()
                         gt_bottom = gt_bottom.cuda()
 
-                # Inference
+                # Inference WGAN
                 start_time = time.time()
                 _, x2, _ = netG(x, mask)     
                 elapsed_time = time.time() - start_time
@@ -191,7 +191,7 @@ def predict(
                 grid_x, grid_y = np.mgrid[0:config['mask_shape'][0]+2*config['boundary']:1,
                                           0:config['mask_shape'][1]+2*config['boundary']:1]
                 if method == 'gaussian':
-                    kernel = C(1.0, (1e-3, 1e3)) * RBF(10, (1e-2, 1e2))
+                    kernel = C(1.0, (1e-6, 1e6)) * RBF(10, (1e-3, 1e3))
 
                 for l in range(config['image_shape'][0]):
                     points = np.concatenate(
@@ -684,8 +684,8 @@ def plot_eval(
 if __name__ == '__main__':
     args = parser.parse_args()
 
-    methods = ['linear', 'spline', 'wgan']
-    # methods = ['wgan']
+    # methods = ['linear', 'spline', 'wgan']
+    methods = ['gaussian']
     err_str = ['MAE [mT]', 'MSE [mT]', 'PSNR [dB]','MAPE [%]', 'Div [mT/px]', 'Curl [μT/px]', 'Inference [s]']
     err_mat = np.zeros([len(err_str), len(methods) + 1])
     num_samples = 100
