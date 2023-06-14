@@ -144,7 +144,11 @@ def predict(
                         gt_bottom = gt_bottom.cuda()
 
                 # Inference
-                _, x2, _ = netG(x, mask)              
+                start_time = time.time()
+                _, x2, _ = netG(x, mask)     
+                elapsed_time = time.time() - start_time
+                inference = elapsed_time
+                         
 
             elif method in ['linear', 'spline', 'gaussian']:
                 # Splitting up for each spatial location
@@ -167,8 +171,11 @@ def predict(
                         ), axis=-1).reshape((-1,2))
 
                     if method == 'linear':
+                        start_time = time.time()
                         x_post[0,l,:,:] = griddata(points, values, (grid_x, grid_y), method='linear')
-
+                        elapsed_time = time.time() - start_time
+                        inference = elapsed_time
+                        
                     elif method == 'spline':
                         if config['outpaint']:
                             tck = bisplrep(
@@ -182,8 +189,11 @@ def predict(
                                 tck
                             )
                         else:
+                            start_time = time.time()
                             x_post[0,l,:,:] = griddata(points, values, (grid_x, grid_y), method='cubic')
-
+                            elapsed_time = time.time() - start_time
+                            inference = elapsed_time
+                            
                     elif method == 'gaussian':
                         scaler = preprocessing.StandardScaler().fit(points)
                         pts_scaled = scaler.transform(points)
@@ -272,11 +282,12 @@ def predict(
 
         # Pixel-wise percentage error 
         pct = part_err / abs(gt[0,:,:,:])
-        # print(
-        #     'Mean:', np.mean(pct[np.where(pct!=0)].flatten()),
-        #     'Std:', np.std(pct[np.where(pct!=0)].flatten()) ,
-        #     'Median:', np.median(pct[np.where(pct!=0)].flatten())
-        # )
+        print(
+            'Mean:', np.mean(pct[np.where(pct!=0)].flatten()),
+            'Std:', np.std(pct[np.where(pct!=0)].flatten()) ,
+            'Median:', np.median(pct[np.where(pct!=0)].flatten()),
+            'Inference: ', inference
+        )
         loss_pct = np.median(pct[np.where(pct!=0)].flatten())
 
         # Storing losses in DataFrame
@@ -338,7 +349,7 @@ def predict(
         
         fname = str(config["box_amount"]) + '_' + str(config["mask_shape"][0]) \
             + '_' + timestamp + '_' + method
-        df_eval.to_pickle(f'{output_path}/{fname}_THIS_ONE.p')
+        df_eval.to_pickle(f'{output_path}/{fname}.p')
         df_px.to_pickle(f'{output_path}/{fname}_px.p')
 
 
