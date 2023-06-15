@@ -19,7 +19,7 @@ x2_bnd: False
 exp_name: 'in_94_l1'
 
 # Costum parameter for magnetic field prediction
-boundary: 1
+boundary: 2
 box_amount: 1
 box_patch: 4
 mode: inpaint #extend

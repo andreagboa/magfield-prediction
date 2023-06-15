@@ -69,7 +69,7 @@ def predict(
     if not output_path.exists(): output_path.mkdir()
 
     df_px = pd.DataFrame([], columns=['i', 'j', 'd_h', 'd_w', 'err', 'err_pct'])
-    df_eval = pd.DataFrame([], columns=['loss', 'loss_pct', 'div', 'curl'])
+    df_eval = pd.DataFrame([], columns=['loss', 'MSE', 'loss_pct', 'div', 'curl'])
 
     cfg_path=Path(__file__).parent.resolve() / 'configs' / cfg_file
     config = get_config(cfg_path)
@@ -277,29 +277,32 @@ def predict(
         part_err = err[0,:,:,:]
         if np.count_nonzero(part_err) == 0:
             loss = 0
+            MSE = 0
         else:
             loss = np.sum(part_err) / np.count_nonzero(part_err)
+            MSE = np.sum(part_err)**2 / np.count_nonzero(part_err)
 
         # Pixel-wise percentage error 
         pct = part_err / abs(gt[0,:,:,:])
-        print(
-            'Mean:', np.mean(pct[np.where(pct!=0)].flatten()),
-            'Std:', np.std(pct[np.where(pct!=0)].flatten()) ,
-            'Median:', np.median(pct[np.where(pct!=0)].flatten()),
-            'Inference: ', inference
-        )
+        # print(
+        #     'Mean:', np.mean(pct[np.where(pct!=0)].flatten()),
+        #     'Std:', np.std(pct[np.where(pct!=0)].flatten()) ,
+        #     'Median:', np.median(pct[np.where(pct!=0)].flatten()),
+        #     'Inference: ', inference
+        # )
         loss_pct = np.median(pct[np.where(pct!=0)].flatten())
 
         # Storing losses in DataFrame
         df_eval = df_eval.append(pd.DataFrame([
             [
                 loss,
+                MSE,
                 loss_pct,
                 div,
                 curl,
                 inference
             ]
-        ], columns=['loss', 'loss_pct', 'div', 'curl', 'inference']), ignore_index=True)
+        ], columns=['loss', 'MSE','loss_pct', 'div', 'curl', 'inference']), ignore_index=True)
 
         if plot:
             figpath = output_path / 'figs'

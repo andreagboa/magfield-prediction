@@ -83,7 +83,7 @@ def predict(
 
     df_px = pd.DataFrame([], columns=['i', 'j', 'd_h', 'd_w', 'err', 'err_pct'])
     df_mask = pd.DataFrame([], columns=['d_h', 'd_w', 'err', 'err_pct'])
-    df_eval = pd.DataFrame([], columns=['loss', 'loss_pct', 'div', 'curl'])
+    df_eval = pd.DataFrame([], columns=['loss', 'MSE', 'loss_pct', 'div', 'curl', 'inference'])
     df_eval2 = pd.DataFrame([], columns=['MAE', 'MAPE', 'div', 'curl'])
 
     cfg_path=Path(__file__).parent.resolve() / 'configs' / cfg_file
@@ -342,8 +342,10 @@ def predict(
         part_err = err[0,:,err_min:err_max,err_min:err_max]
         if np.count_nonzero(part_err) == 0:
             loss = 0
+            MSE = 0
         else:
             loss = np.sum(part_err) / np.count_nonzero(part_err)
+            MSE = np.sum(part_err)**2 / np.count_nonzero(part_err)
 
         # Pixel-wise percentage error 
         pct = part_err / abs(gt[0,:,err_min:err_max,err_min:err_max])
@@ -358,11 +360,12 @@ def predict(
         df_eval = df_eval.append(pd.DataFrame([
             [
                 loss,
+                MSE,
                 loss_pct,
                 div,
                 curl
             ]
-        ], columns=['loss', 'loss_pct', 'div', 'curl']), ignore_index=True)
+        ], columns=['loss', 'MSE', 'loss_pct', 'div', 'curl']), ignore_index=True)
 
         df_eval2 = df_eval2.append(pd.DataFrame([
             [
@@ -414,7 +417,7 @@ def predict(
             # plt.savefig(f'{figpath}/{figname}.svg')
         
         mae_mat[i] = loss
-        mse_mat[i] = loss**2
+        mse_mat[i] = MSE
         psnr_mat[i] = 20 * np.log10(np.max(np.abs(gt)) / np.sqrt(mse_mat[i]))
         mape_mat[i] = loss_pct*100
         div_mat[i] = div
@@ -684,8 +687,8 @@ def plot_eval(
 if __name__ == '__main__':
     args = parser.parse_args()
 
-    # methods = ['linear', 'spline', 'wgan']
-    methods = ['gaussian']
+    # methods = ['linear', 'spline']
+    methods = ['spline']
     err_str = ['MAE [mT]', 'MSE [mT]', 'PSNR [dB]','MAPE [%]', 'Div [mT/px]', 'Curl [μT/px]', 'Inference [s]']
     err_mat = np.zeros([len(err_str), len(methods) + 1])
     num_samples = 100

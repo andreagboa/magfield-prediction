@@ -22,8 +22,9 @@ plt_scale = 0.1
 rng = np.random.default_rng(0)
 path_orig = Path(__file__).parent.resolve() / 'checkpoints' / 'boundary_1_256'
 
-models = ['in_94_coarseG_l1', 'in_94_coarseG_l1False', 'in_94_l1', 'in_94_lightweight']
-it_number = 600000
+# models = ['in_94_coarseG_l1', 'in_94_coarseG_l1False', 'in_94_l1', 'in_94_lightweight']
+models = ['in_div_curl_1_94_1']
+it_number = 560000
 
 file = h5py.File('data/magfield_val_256.h5')
 
