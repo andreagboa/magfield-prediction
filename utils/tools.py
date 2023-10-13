@@ -270,6 +270,29 @@ def mask_image(x, bboxes, config, bnd=None):
 
     return result, mask
 
+def mask_image2(x, bboxes, config, bnd=None, perc = 100):
+    _, height, width = config['image_shape']
+    max_delta_h, max_delta_w = config['max_delta_shape']
+    mask = bbox2mask(bboxes, height, width, max_delta_h, max_delta_w, bnd, config['outpaint'])
+    if type(x) != np.ndarray:
+        if x.is_cuda:
+            mask = mask.cuda()
+    else:
+        mask = mask.cpu().data.numpy()
+    (t,l,h,w) = bboxes[0,0]
+
+    if bnd is None:
+        original = x
+        result = x * (1. - mask)
+    else:
+        original = x[
+            :,:,
+            t - bnd:t + h + bnd,
+            l - bnd:l + w + bnd
+        ]
+        result = original * (1. - mask)
+
+    return result, mask, original
 
 def patch_mask(config):
     height, width = config['mask_shape']
